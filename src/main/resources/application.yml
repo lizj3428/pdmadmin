@@ -1,0 +1,49 @@
+server:
+  servlet:
+    context-path: /pdmadmin
+port: 8080
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/pdmdb?characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: 123456
+    type: com.alibaba.druid.pool.DruidDataSource  # 数据库连接池
+    druid:
+      initial-size: 5        # 初始化大小
+      min-idle: 10           # 最小连接数
+      max-active: 20         # 最大连接数
+      max-wait: 60000        # 获取连接时的最大等待时间
+      validation-query: SELECT 1  # 检测连接是否有效的 SQL语句，为空时以下三个配置均无效
+      test-on-borrow: true   # 申请连接时执行validationQuery检测连接是否有效，默认true，开启后会降低性能
+      test-while-idle: true  # 申请连接时如果空闲时间大于timeBetweenEvictionRunsMillis，执行validationQuery检测连接是否
+      test-on-return: false  # 归还连接时执行validationQuery检测连接是否有效，默认false，开启后会降低性能
+
+# springdoc-openapi 底层核心配置（springdoc是OpenAPI的实现框架，Knife4j依赖它）
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html         # 原生swagger-ui页面地址（我们一般不用，用knife4j的doc.html）
+    tags-sorter: alpha             # 接口分组排序：alpha=按字母顺序排序
+    operations-sorter: alpha       # 同一个分组里面的接口，按字母排序
+  api-docs:
+    path: /v3/api-docs             # 后端生成接口原始json数据的地址，Knife4j页面会读取这个json渲染页面
+  group-configs:
+    - group: 'default'             # 接口分组名称，default默认分组
+      paths-to-match: '/**'        # 匹配哪些接口路径，/**代表匹配全部接口
+      packages-to-scan: com.example.pdmadmin.controller  # 扫描哪个包下的Controller，【重点！改成你自己controller包名】
+
+# knife4j 增强UI配置（美化界面，可选配置，删掉也能跑）
+knife4j:
+  enable: true                     # 开启knife4j增强功能，true开启 false关闭
+  setting:
+    language: zh_cn                # 页面语言：中文
+    swagger-model-name: 实体类列表  # 文档里实体类模块的标题名称
+mybatis-plus:
+  configuration:
+    # MyBatis 配置 开启驼峰功能
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  #为MyBatis引用的实体类自定义别名
+  type-aliases-package: com.example.pdmadmin.entity
+
