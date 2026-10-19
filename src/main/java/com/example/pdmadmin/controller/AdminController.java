@@ -25,6 +25,7 @@ public class AdminController {
     private AdminService adminService;
     @Operation(summary = "新增管理员", description = "1.")
     @PostMapping("/admin/add")
+    @CrossOrigin
     public R add(@RequestBody Admin admin){
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(Admin::getUsername, admin.getUsername());
@@ -37,24 +38,27 @@ public class AdminController {
     }
     @Operation(summary = "管理员列表信息", description = "2.")
     @PostMapping("/admin/list")
+    @CrossOrigin
     public R<PageInfo<Admin>> list(@RequestBody Admin admin, @RequestParam Integer pageNum, @RequestParam Integer pageSize){
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.like( admin.getName()!=null, Admin::getName, admin.getName());
         lambdaQueryWrapper.like( admin.getTel()!=null, Admin::getTel, admin.getTel());
         PageHelper.startPage(pageNum, pageSize);
-        List<Admin> list = adminService.list();
+        List<Admin> list = adminService.list(lambdaQueryWrapper);
         PageInfo<Admin> pageInfo = new PageInfo(list);
         return R.data(pageInfo);
     }
 
     @Operation(summary = "修改管理员", description = "3.")
     @PostMapping("/admin/update")
+    @CrossOrigin
     public R update(@RequestBody Admin admin){
         adminService.updateById(admin);
         return R.success();
     }
     @Operation(summary = "删除管理员", description = "4.")
     @PostMapping("/admin/del")
+    @CrossOrigin
     public R<Object> del(@RequestParam Long id){
         adminService.removeById(id);
         return R.success();
