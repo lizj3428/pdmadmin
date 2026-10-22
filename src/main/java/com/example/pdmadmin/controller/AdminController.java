@@ -43,6 +43,7 @@ public class AdminController {
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.like( admin.getName()!=null, Admin::getName, admin.getName());
         lambdaQueryWrapper.like( admin.getTel()!=null, Admin::getTel, admin.getTel());
+        lambdaQueryWrapper.orderByDesc(Admin::getId);
         PageHelper.startPage(pageNum, pageSize);
         List<Admin> list = adminService.list(lambdaQueryWrapper);
         PageInfo<Admin> pageInfo = new PageInfo(list);
@@ -59,8 +60,8 @@ public class AdminController {
     @Operation(summary = "删除管理员", description = "4.")
     @PostMapping("/admin/del")
     @CrossOrigin
-    public R<Object> del(@RequestParam Long id){
-        adminService.removeById(id);
+    public R del(@RequestParam List<Long> ids){
+        adminService.removeByIds(ids);
         return R.success();
     }
 }
