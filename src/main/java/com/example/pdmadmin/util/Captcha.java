@@ -10,4 +10,6 @@ public class Captcha {
         // 验证码图片
         private String captchaImage;
 
+        public void storeCaptcha(String captchaId, String captchaText) {
+        }
 }
