@@ -11,15 +11,20 @@ import lombok.Data;
 @Schema(description = "管理员信息实体类")
 public class Admin {
     @TableId(type = IdType.AUTO)
-    public Long id;   /*主键ID */
+    private Long id;   /*主键ID */
     @Schema(description = "用户名")
-    public String username;
-    public String userpwd;
+     String username;
+    private String userpwd;
 
-    public String name;
-    public String sex;
-    public String tel;   /*电话*/
-    public String headurl;    /* 头像*/
+    private String name;
+    private String sex;
+    private String tel;   /*电话*/
+    private String headurl;    /* 头像*/
+    private String captchaId;
+    private String captchaCode;
+    private String token;
+
+
 
 
 }

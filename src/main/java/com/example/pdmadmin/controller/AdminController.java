@@ -1,10 +1,12 @@
 package com.example.pdmadmin.controller;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Admin;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.response.ResponseCode;
 import com.example.pdmadmin.service.AdminService;
+import com.example.pdmadmin.util.CaptchCache;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +25,8 @@ import java.util.List;
 public class AdminController {
     @Resource
     private AdminService adminService;
+    @Resource
+    private CaptchCache captchCache;
     @Operation(summary = "新增管理员", description = "1.")
     @PostMapping("/admin/add")
     @CrossOrigin
@@ -64,4 +68,31 @@ public class AdminController {
         adminService.removeByIds(ids);
         return R.success();
     }
+
+
+    /**
+     * 管理员登录
+     * @return
+     */
+    @Operation(summary = "管理员登录")
+    @PostMapping("/admin/login")
+    @CrossOrigin
+    public R<Admin> login(@RequestParam String username, @RequestParam String userpwd){
+        //根据传入的用户名和密码去数据库查询
+        LambdaQueryWrapper<Admin> adminWrapper = new LambdaQueryWrapper<>();
+        adminWrapper.eq(Admin::getUsername,username);
+        adminWrapper.eq(Admin::getUserpwd,userpwd);
+        Admin admin = adminService.getOne(adminWrapper);
+        //数据库没有数据，就提示用户名密码错误
+        if(admin == null){
+            throw new BusinessException(ResponseCode.USERNAME_USERPWD_ERROR);
+        }
+        //根据ID进行登录
+        StpUtil.login(admin.getId());
+        //获取当前登录会话的token，赋值给admin的token属性
+        admin.setToken(StpUtil.getTokenValue());
+        return R.data(admin);
+    }
+
+
 }
