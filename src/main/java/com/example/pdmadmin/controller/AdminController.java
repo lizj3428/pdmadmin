@@ -3,6 +3,7 @@ package com.example.pdmadmin.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Admin;
+import com.example.pdmadmin.exception.BusinessException;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.response.ResponseCode;
 import com.example.pdmadmin.service.AdminService;
@@ -77,8 +78,13 @@ public class AdminController {
     @Operation(summary = "管理员登录")
     @PostMapping("/admin/login")
     @CrossOrigin
-    public R<Admin> login(@RequestParam String username, @RequestParam String userpwd){
-        //根据传入的用户名和密码去数据库查询
+    public R<Admin> login(@RequestParam String username, @RequestParam String userpwd,
+                          @RequestParam String captchaId, @RequestParam String captchaCode){
+        //1.校验验证码：输错或过期都不放行，校验通过后验证码立即失效
+        if (!captchCache.validateCaptcha(captchaId, captchaCode)) {
+            throw new BusinessException(ResponseCode.CAPTCHA_ERROR);
+        }
+        //2.根据传入的用户名和密码去数据库查询
         LambdaQueryWrapper<Admin> adminWrapper = new LambdaQueryWrapper<>();
         adminWrapper.eq(Admin::getUsername,username);
         adminWrapper.eq(Admin::getUserpwd,userpwd);
@@ -93,6 +99,14 @@ public class AdminController {
         admin.setToken(StpUtil.getTokenValue());
         return R.data(admin);
     }
+
+    @CrossOrigin
+    @PostMapping("/admin/logout")
+    public R logout() {
+        StpUtil.logout();
+        return R.success();
+    }
+
 
 
 }

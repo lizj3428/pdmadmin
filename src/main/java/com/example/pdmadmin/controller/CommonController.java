@@ -1,6 +1,6 @@
 package com.example.pdmadmin.controller;
 
-import com.example.pdmadmin.exception.BussinessException;
+import com.example.pdmadmin.exception.BusinessException;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.response.ResponseCode;
 import com.example.pdmadmin.util.Captcha;
@@ -56,7 +56,7 @@ public class CommonController {
             ImageIO.write(image, "jpg", os);
             base64Code = Base64.getEncoder().encodeToString(os.toByteArray());
         } catch (Exception e) {
-            throw new BussinessException(ResponseCode.CREATE_CAPTCHA);
+            throw new BusinessException(ResponseCode.CREATE_CAPTCHA_ERROR);
         }
         Captcha captcha = new Captcha();
         captcha.setCaptchaImage("data:image/png;base64,"+base64Code);

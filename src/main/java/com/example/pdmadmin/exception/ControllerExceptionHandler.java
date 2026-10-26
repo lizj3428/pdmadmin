@@ -10,8 +10,8 @@ public class ControllerExceptionHandler {
     public R handleException(Exception e) {
         return R.fail(e.getMessage());
     }
-    @ExceptionHandler(BussinessException.class)
-    public R handleBussinessException(BussinessException e) {
+    @ExceptionHandler(BusinessException.class)
+    public R handleBusinessException(BusinessException e) {
         return R.fail(e.getCode(), e.getMessage());
     }
 
