@@ -1,5 +1,6 @@
 package com.example.pdmadmin.controller;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Admin;
@@ -44,6 +45,7 @@ public class AdminController {
     @Operation(summary = "管理员列表信息", description = "2.")
     @PostMapping("/admin/list")
     @CrossOrigin
+    @SaCheckLogin
     public R<PageInfo<Admin>> list(@RequestBody Admin admin, @RequestParam Integer pageNum, @RequestParam Integer pageSize){
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.like( admin.getName()!=null, Admin::getName, admin.getName());
