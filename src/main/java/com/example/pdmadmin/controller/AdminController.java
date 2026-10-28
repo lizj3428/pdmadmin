@@ -32,6 +32,7 @@ public class AdminController {
     @Operation(summary = "新增管理员", description = "1.")
     @PostMapping("/admin/add")
     @CrossOrigin
+    @SaCheckLogin
     public R add(@RequestBody Admin admin){
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(Admin::getUsername, admin.getUsername());
@@ -60,6 +61,7 @@ public class AdminController {
     @Operation(summary = "修改管理员", description = "3.")
     @PostMapping("/admin/update")
     @CrossOrigin
+    @SaCheckLogin
     public R update(@RequestBody Admin admin){
         adminService.updateById(admin);
         return R.success();
@@ -67,6 +69,7 @@ public class AdminController {
     @Operation(summary = "删除管理员", description = "4.")
     @PostMapping("/admin/del")
     @CrossOrigin
+    @SaCheckLogin
     public R del(@RequestParam List<Long> ids){
         adminService.removeByIds(ids);
         return R.success();
@@ -103,6 +106,7 @@ public class AdminController {
     }
 
     @CrossOrigin
+    @SaCheckLogin
     @PostMapping("/admin/logout")
     public R logout() {
         StpUtil.logout();
