@@ -20,6 +20,19 @@ spring:
       test-while-idle: true  # 申请连接时如果空闲时间大于timeBetweenEvictionRunsMillis，执行validationQuery检测连接是否
       test-on-return: false  # 归还连接时执行validationQuery检测连接是否有效，默认false，开启后会降低性能
 
+  # Redis 配置（阶段0新增：缓存热点资讯、存储验证码）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:        # 本机 Redis 未设密码则留空
+      database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
 # springdoc-openapi 底层核心配置（springdoc是OpenAPI的实现框架，Knife4j依赖它）
 springdoc:
   swagger-ui:

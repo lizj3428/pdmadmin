@@ -31,7 +31,6 @@ public class AdminController {
     private CaptchCache captchCache;
     @Operation(summary = "新增管理员", description = "1.")
     @PostMapping("/admin/add")
-    @CrossOrigin
     @SaCheckLogin
     public R add(@RequestBody Admin admin){
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
@@ -45,7 +44,6 @@ public class AdminController {
     }
     @Operation(summary = "管理员列表信息", description = "2.")
     @PostMapping("/admin/list")
-    @CrossOrigin
     @SaCheckLogin
     public R<PageInfo<Admin>> list(@RequestBody Admin admin, @RequestParam Integer pageNum, @RequestParam Integer pageSize){
         LambdaQueryWrapper<Admin> lambdaQueryWrapper = new LambdaQueryWrapper<>();
@@ -60,7 +58,6 @@ public class AdminController {
 
     @Operation(summary = "修改管理员", description = "3.")
     @PostMapping("/admin/update")
-    @CrossOrigin
     @SaCheckLogin
     public R update(@RequestBody Admin admin){
         adminService.updateById(admin);
@@ -68,7 +65,6 @@ public class AdminController {
     }
     @Operation(summary = "删除管理员", description = "4.")
     @PostMapping("/admin/del")
-    @CrossOrigin
     @SaCheckLogin
     public R del(@RequestParam List<Long> ids){
         adminService.removeByIds(ids);
@@ -82,7 +78,6 @@ public class AdminController {
      */
     @Operation(summary = "管理员登录")
     @PostMapping("/admin/login")
-    @CrossOrigin
     public R<Admin> login(@RequestParam String username, @RequestParam String userpwd,
                           @RequestParam String captchaId, @RequestParam String captchaCode){
         //1.校验验证码：输错或过期都不放行，校验通过后验证码立即失效
@@ -105,7 +100,6 @@ public class AdminController {
         return R.data(admin);
     }
 
-    @CrossOrigin
     @SaCheckLogin
     @PostMapping("/admin/logout")
     public R logout() {

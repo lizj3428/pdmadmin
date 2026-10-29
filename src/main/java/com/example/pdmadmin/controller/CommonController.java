@@ -45,7 +45,6 @@ public class CommonController {
      *
      * @return 包含验证码ID和图片（data:image/png;base64,xxx）的响应数据
      */
-    @CrossOrigin
     @GetMapping ("/common/getCaptcha")
     public R<Captcha> getCaptcha() {
         String captchaText = defaultKaptcha.createText();

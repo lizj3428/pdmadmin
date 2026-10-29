@@ -104,6 +104,18 @@
 			<version>1.38.0</version>
 		</dependency>
 
+		<!-- Redis 缓存（阶段0新增：热点资讯缓存 + 验证码存储） -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
+		<!-- WebSocket 实时推送（阶段0新增：站内消息实时推送通道） -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+
 
 
 	</dependencies>
