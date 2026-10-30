@@ -116,6 +116,13 @@
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
 
+		<!-- 密码加密：只引 crypto 模块，不引整个 Spring Security，
+		     避免它的自动配置去接管 Sa-Token 的登录态 -->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-crypto</artifactId>
+		</dependency>
+
 
 
 	</dependencies>

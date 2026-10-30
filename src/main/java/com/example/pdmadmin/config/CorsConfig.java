@@ -5,10 +5,14 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 全局跨域配置
+ * 全局跨域配置（只管 HTTP 接口，管不到 WebSocket）
  * 【作用】前端（Vite 端口，如 5173）和后端（8080）是"不同源"，浏览器默认禁止前端直接访问后端接口。
- *        这里统一放行所有跨域请求，否则：① 普通接口调不通；② WebSocket 握手也会失败。
+ *        这里统一放行所有跨域请求，否则普通接口一调就被浏览器拦掉。
  *        改用全局配置后，Controller 方法上散落的 @CrossOrigin 就可以删掉，避免规则打架。
+ *
+ * 【注意】本类实现的是 WebMvcConfigurer，只对 Spring MVC 的 HTTP 接口生效，
+ *        对 WebSocket 握手无效。WebSocket 的跨域由 WebSocketConfig 里的
+ *        .setAllowedOrigins("*") 单独控制 —— WS 连不上时改这里没有任何作用。
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {

@@ -1,19 +1,21 @@
 -- ============================================================
 -- 校园资讯推送平台（pdmdb）建表脚本
 -- 严格对应论文 表4-1 ~ 表4-14，共 14 张业务表
--- 说明：本脚本用于首次初始化，会重建 admin/news/user 三张老表
---       老 admin 的 2 个账号会自动迁移到新表（userpwd -> password）
--- 执行：mysql -uroot -p123456 --default-character-set=utf8mb4 pdmdb < pdm_schema.sql
+--
+-- 说明：本脚本会重建全部 14 张表，对「全新空库」和「已有库」都能直接执行，
+--       不依赖任何老表存在，也不再迁移老数据。
+--       执行完成后管理员账号只有一个种子账号：admin / 123456
+--       如需保留旧账号，请先在旧库执行 select * from admin 自行备份。
+--
+-- 执行：mysql -uroot -p<你的密码> --default-character-set=utf8mb4 pdmdb < pdm_schema.sql
 -- ============================================================
 
 SET NAMES utf8mb4;
 USE pdmdb;
 
 -- ========== 表4-1 管理员表 admin ==========
--- 老表列: id, username, userpwd, name, sex, tel, headurl
--- 新表列: 按论文，userpwd->password, name->real_name, tel->phone
-DROP TABLE IF EXISTS admin_bak_tmp;
-RENAME TABLE admin TO admin_bak_tmp;
+-- 直接重建，不迁移老表：老结构为 userpwd/name/tel，新结构按论文为 password/real_name/phone
+DROP TABLE IF EXISTS admin;
 
 CREATE TABLE admin (
     id              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '管理员ID',
@@ -30,20 +32,11 @@ CREATE TABLE admin (
     UNIQUE KEY uk_admin_username (username)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '管理员表';
 
--- 迁移老账号数据
--- 注意：老表存在重复 username（id=2、id=3 都是 admin），新表有唯一索引，
--- 直接搬会报 Duplicate entry。这里用窗口函数去重：
---   同名的保留 id 最大的一条（id=3 的 admin/123456），其余追加 '_<id>' 后缀
-INSERT INTO admin (id, username, password, real_name, phone, role_type, status, create_time)
-SELECT id,
-       CASE WHEN rn = 1 THEN username ELSE CONCAT(username, '_', id) END,
-       userpwd, name, tel, 1, 1, NOW()
-FROM (
-    SELECT a.*, ROW_NUMBER() OVER (PARTITION BY username ORDER BY id DESC) AS rn
-    FROM admin_bak_tmp a
-) t;
-
-DROP TABLE admin_bak_tmp;
+-- 种子账号：admin / 123456
+-- 密码存 BCrypt 密文（$2b$ 前缀、60 字符），明文永远不入库；
+-- 登录时由 PasswordUtil 用 BCrypt 校验，库里没有明文可比对
+INSERT INTO admin (username, password, real_name, role_type, status, create_time)
+VALUES ('admin', '$2b$10$5xhne/zwObyIQulbNT2XG.XRjnM6jvF28IhCY6r9L9ewBs2rWdzIW', '超级管理员', 1, 1, NOW());
 
 -- ========== 表4-2 教师表 teacher ==========
 DROP TABLE IF EXISTS teacher;

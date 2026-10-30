@@ -13,7 +13,9 @@ public enum ResponseCode {
     CREATE_CAPTCHA_ERROR(2001,"验证码失败！"),
     CAPTCHA_ERROR(2002,"验证码失败！"),
     USERNAME_USERPWD_ERROR(1002,"用户名密码错误！"),
-    USERNAME_EXIST(1001,"用户名已存在！");
+    USERNAME_EXIST(1001,"用户名已存在！"),
+    ACCOUNT_DISABLED(1003,"账号已被禁用！"),
+    PASSWORD_EMPTY(1004,"密码不能为空！");
     /*
     响应状态码
      */
