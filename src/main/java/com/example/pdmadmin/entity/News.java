@@ -1,11 +1,13 @@
 package com.example.pdmadmin.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** 资讯表（论文表4-5） */
 @Data
@@ -28,4 +30,9 @@ public class News {
     private Integer viewCount;    // 阅读量
     private LocalDateTime createTime; // 创建时间
     private LocalDateTime updateTime; // 更新时间
+
+    // 标签名列表：数据库没有这一列，只用来接收前端传来的标签、以及详情接口返回。
+    // 真正的关联存在 news_tag 表。不加 exist=false，MyBatis-Plus 会去找 tag_names 列导致报错。
+    @TableField(exist = false)
+    private List<String> tagNames;
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -29,6 +30,10 @@ public class RedisConfig {
         // JSON 序列化（用 Jackson 把对象转成 JSON 字符串再存）
         ObjectMapper om = new ObjectMapper();
         om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        // 注册 Java 8 时间模块：实体里有 LocalDateTime 字段（如资讯的 publishTime），
+        // 不注册的话写缓存时会直接抛 "Java 8 date/time type not supported by default"。
+        // Spring MVC 的 Jackson 自带这个模块，所以普通接口不报错，只有 Redis 这里会踩
+        om.registerModule(new JavaTimeModule());
         // 记录对象类型，反序列化时能正确转回原来的类
         om.activateDefaultTyping(LaissezFaireSubTypeValidator.instance,
                 ObjectMapper.DefaultTyping.NON_FINAL);

@@ -6,19 +6,22 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.pdmadmin.entity.News;
 import com.example.pdmadmin.entity.NewsTag;
+import com.example.pdmadmin.entity.Tag;
 import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.NewsTagMapper;
+import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  *        论文第5章 5.2.1（NewsController.publish）和 5.2.2（AuditController.audit）
  *        对应的就是这里的 /news/add 与 /news/audit。
  */
-@Tag(name = "资讯管理", description = "资讯的增删改查、审核、热点列表")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "资讯管理", description = "资讯的增删改查、审核、热点列表")
 @RestController
 public class NewsController {
 
@@ -38,6 +41,8 @@ public class NewsController {
     private NewsMapper newsMapper;
     @Resource
     private NewsTagMapper newsTagMapper;
+    @Resource
+    private TagMapper tagMapper;
     @Resource
     private RedisTemplate<String, Object> redisTemplate;
 
@@ -102,6 +107,8 @@ public class NewsController {
         news.setCreateTime(LocalDateTime.now());
         news.setUpdateTime(LocalDateTime.now());
         newsMapper.insert(news);
+        // insert 之后 news.getId() 才有值，才能建标签关联
+        saveNewsTags(news.getId(), news.getTagNames());
         // 内容变了，热点缓存必须清掉，不然用户看到的还是旧列表
         redisTemplate.delete(HOT_CACHE_KEY);
         return R.success();
@@ -123,6 +130,11 @@ public class NewsController {
         news.setAuthorId(null);
         news.setUpdateTime(LocalDateTime.now());
         newsMapper.updateById(news);
+        // tagNames 为 null 表示「这次不碰标签」（比如只改标题）；
+        // 传空数组 [] 才表示「把这条资讯的标签清空」。两种语义必须区分开
+        if (news.getTagNames() != null) {
+            saveNewsTags(news.getId(), news.getTagNames());
+        }
         redisTemplate.delete(HOT_CACHE_KEY);
         return R.success();
     }
@@ -138,7 +150,7 @@ public class NewsController {
         return R.success();
     }
 
-    @Operation(summary = "资讯详情", description = "返回资讯内容，同时把阅读量 +1")
+    @Operation(summary = "资讯详情", description = "返回资讯内容与标签，同时把阅读量 +1")
     @PostMapping("/news/detail")
     @SaCheckLogin
     public R<News> detail(@RequestParam Long id) {
@@ -148,7 +160,17 @@ public class NewsController {
                 .eq(News::getId, id)
                 .setSql("view_count = view_count + 1"));
         // 再查一次，让返回值里的阅读量是自增后的新值
-        return R.data(newsMapper.selectById(id));
+        News news = newsMapper.selectById(id);
+        if (news == null) {
+            throw new RuntimeException("资讯不存在！");
+        }
+        // 标签只在详情里带，列表接口不带：列表一页 10 条要是每条都查一次标签，就是 10 次额外查询
+        List<Long> tagIds = newsTagMapper.selectList(
+                        new LambdaQueryWrapper<NewsTag>().eq(NewsTag::getNewsId, id))
+                .stream().map(NewsTag::getTagId).toList();
+        news.setTagNames(tagIds.isEmpty() ? List.of()
+                : tagMapper.selectByIds(tagIds).stream().map(Tag::getName).toList());
+        return R.data(news);
     }
 
     @Operation(summary = "审核资讯", description = "auditStatus=1 通过并发布；auditStatus=2 驳回并记录审核意见")
@@ -180,5 +202,40 @@ public class NewsController {
         newsMapper.updateById(update);
         redisTemplate.delete(HOT_CACHE_KEY);
         return R.success();
+    }
+
+    /**
+     * 保存资讯的标签关联
+     * 先删后插：逐个比对增删容易漏，直接清空重建最可靠
+     * 标签名不存在时自动创建（老师发资讯时顺手打上的新标签，不该逼他先去标签管理页建一遍）
+     */
+    private void saveNewsTags(Long newsId, List<String> tagNames) {
+        newsTagMapper.delete(new LambdaQueryWrapper<NewsTag>().eq(NewsTag::getNewsId, newsId));
+        if (tagNames == null || tagNames.isEmpty()) {
+            return;
+        }
+        // 去重：前端可能传两个「考研」，而 news_tag 上有 (news_id, tag_id) 唯一索引，
+        // 重复插入会直接报 Duplicate entry
+        Set<String> names = new LinkedHashSet<>();
+        for (String name : tagNames) {
+            if (name != null && !name.trim().isEmpty()) {
+                names.add(name.trim());
+            }
+        }
+        for (String name : names) {
+            Tag tag = tagMapper.selectOne(new LambdaQueryWrapper<Tag>().eq(Tag::getName, name));
+            if (tag == null) {
+                tag = new Tag();
+                tag.setName(name);
+                tag.setUseCount(0);
+                tag.setCreateTime(LocalDateTime.now());
+                tagMapper.insert(tag);
+            }
+            NewsTag link = new NewsTag();
+            link.setNewsId(newsId);
+            link.setTagId(tag.getId());
+            link.setCreateTime(LocalDateTime.now());
+            newsTagMapper.insert(link);
+        }
     }
 }
