@@ -23,12 +23,13 @@ public class TestPushController {
 
     @GetMapping("/push")
     public String push(
-            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String loginKey,
             @RequestParam(defaultValue = "测试推送") String title,
             @RequestParam(defaultValue = "这是一条来自后端的实时消息") String content) {
         String json = "{\"title\":\"" + title + "\",\"content\":\"" + content + "\"}";
-        if (userId != null) {
-            messagePushService.sendToUser(userId, json);
+        // loginKey 形如 admin:1 / student:5，不传则群发
+        if (loginKey != null && !loginKey.isEmpty()) {
+            messagePushService.sendToUser(loginKey, json);
         } else {
             messagePushService.sendToAll(json);
         }

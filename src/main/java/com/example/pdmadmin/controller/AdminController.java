@@ -9,6 +9,7 @@ import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.response.ResponseCode;
 import com.example.pdmadmin.service.AdminService;
 import com.example.pdmadmin.util.CaptchCache;
+import com.example.pdmadmin.util.LoginUtil;
 import com.example.pdmadmin.util.PasswordUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -138,7 +139,10 @@ public class AdminController {
         adminService.updateById(admin);
 
         //7.根据ID进行登录
-        StpUtil.login(admin.getId());
+        //  登录标识加 admin: 前缀：管理员表和学生表主键都从 1 开始自增，
+        //  纯数字会撞号（admin id=1 和 student id=1 被当成同一身份），
+        //  WebSocket 的连接表也会互相顶掉。加前缀后两套身份彻底分开。
+        StpUtil.login(LoginUtil.loginId(LoginUtil.ROLE_ADMIN, admin.getId()));
         //获取当前登录会话的token，赋值给admin的token属性
         admin.setToken(StpUtil.getTokenValue());
         //8.返回前清掉密码：登录响应里不需要密码，密文也不该出现在浏览器

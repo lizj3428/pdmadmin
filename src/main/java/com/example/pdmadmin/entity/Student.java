@@ -1,6 +1,7 @@
 package com.example.pdmadmin.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -25,4 +26,8 @@ public class Student {
     private Integer disturbFlag; // 免打扰标志 1开启 0关闭
     private Integer status;      // 账号状态 1启用 0禁用
     private LocalDateTime createTime; // 创建时间
+
+    /** token 由登录成功后动态生成（Sa-Token），数据库没有这一列，不参与读写 */
+    @TableField(exist = false)
+    private String token;
 }

@@ -242,3 +242,14 @@ CREATE TABLE operation_log (
 
 -- ========== 清理论文中没有的旧表 ==========
 DROP TABLE IF EXISTS `user`;
+
+-- ========== 种子学生（演示/测试用） ==========
+-- 作用：推送模块的「目标人群」必须真的有人，否则 target_count 永远是 0，实时推送也没人收。
+-- 密码统一是 123456，库里存的是 BCrypt 密文（已用 PasswordUtil 同款算法验证过）。
+-- 用 INSERT IGNORE：重复执行不会因学号唯一索引报错，已存在的直接跳过。
+INSERT IGNORE INTO student
+(student_no, password, real_name, gender, grade, major, class_name, phone, push_channel, disturb_flag, status)
+VALUES
+('20230101', '$2a$10$D99U46SmioRNIc0oIL3m0uZUMrel7IUeAtCDfqKGHTB8alixiGHf2', '张小明', '男', '2023', '计算机应用工程', '23计算机1班', '13800000001', 1, 0, 1),
+('20230102', '$2a$10$D99U46SmioRNIc0oIL3m0uZUMrel7IUeAtCDfqKGHTB8alixiGHf2', '李小红', '女', '2023', '计算机应用工程', '23计算机2班', '13800000002', 1, 0, 1),
+('20220103', '$2a$10$D99U46SmioRNIc0oIL3m0uZUMrel7IUeAtCDfqKGHTB8alixiGHf2', '王大力', '男', '2022', '软件工程', '22软件1班', '13800000003', 1, 0, 1);

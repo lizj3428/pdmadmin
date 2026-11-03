@@ -1,7 +1,6 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.pdmadmin.entity.News;
@@ -11,6 +10,7 @@ import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.NewsTagMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
+import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import io.swagger.v3.oas.annotations.Operation;
@@ -97,7 +97,10 @@ public class NewsController {
         }
         // 创建人取当前登录账号的 id；authorType 暂时固定 1（管理员），
         // 等教师端登录接口写好后，再根据登录角色区分 1管理员 / 2教师
-        news.setAuthorId(StpUtil.getLoginIdAsLong());
+        // 当前登录账号的 id。登录标识现在是 "admin:1" 这种带前缀的字符串，
+        // 不能再用 StpUtil.getLoginIdAsLong()（会抛 NumberFormatException），
+        // 统一走 LoginUtil.currentId() 剥前缀取数字
+        news.setAuthorId(LoginUtil.currentId());
         news.setAuthorType(1);
         // 状态字段一律由后端决定，不信任前端传来的值，否则谁都能直接发未审核的内容
         news.setAuditStatus(0);

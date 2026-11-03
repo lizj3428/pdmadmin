@@ -14,7 +14,7 @@ import java.util.Map;
  * 【作用】在 WebSocket 连接真正建立之前做一道"门禁"：
  *   1. 从地址栏参数 ?pdmtoken=xxx 取出 token
  *   2. 用 Sa-Token 校验这个 token 是否有效（是否真登录过）
- *   3. 有效就把 userId 放进连接属性里，后面 WebSocketServer 才知道"这是谁"
+ *   3. 有效就把登录标识（如 admin:1 / student:5）放进连接属性里，后面 WebSocketServer 才知道"这是谁"
  *   4. 无效或没带 token，直接拒绝握手
  */
 @Component
@@ -29,10 +29,12 @@ public class AuthHandshakeInterceptor implements HandshakeInterceptor {
             String token = servletRequest.getServletRequest().getParameter("pdmtoken");
             if (token != null && !token.isEmpty()) {
                 try {
-                    // Sa-Token：用 token 反查登录用户 ID；无效会抛异常
-                    Object loginId = StpUtil.getLoginIdByToken(token);
-                    if (loginId != null) {
-                        attributes.put("userId", Long.valueOf(loginId.toString()));
+                    // Sa-Token：用 token 反查登录标识；无效会抛异常。
+                    // 登录标识形如 "admin:1" / "student:5"（见 LoginUtil），
+                    // 直接原样作为连接的唯一键，靠前缀天然区分角色，不会串号
+                    Object loginKey = StpUtil.getLoginIdByToken(token);
+                    if (loginKey != null) {
+                        attributes.put("loginKey", loginKey.toString());
                         return true; // 校验通过，放行
                     }
                 } catch (Exception e) {
