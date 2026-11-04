@@ -3,10 +3,12 @@ package com.example.pdmadmin.config;
 import com.example.pdmadmin.websocket.AuthHandshakeInterceptor;
 import com.example.pdmadmin.websocket.WebSocketServer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
 /**
  * WebSocket 配置
@@ -33,5 +35,23 @@ public class WebSocketConfig implements WebSocketConfigurer {
         registry.addHandler(webSocketServer, "/ws")
                 .addInterceptors(handshakeInterceptor)
                 .setAllowedOrigins("*");
+    }
+
+    /**
+     * 注册 JSR-356 容器（Tomcat 的 ServerContainer）
+     *
+     * 【为什么必须有这个 Bean】
+     * 没有它，ServletContext 里就没有 ServerContainer 属性，
+     * Spring 的 StandardWebSocketUpgradeStrategy 拿不到容器，
+     * 握手会直接以 400 失败（日志里只有 "Upgrading to WebSocket" 然后就没了）。
+     *
+     * 顺带把消息缓冲区调到 8KB：推送的资讯摘要可能超过默认的 4KB。
+     */
+    @Bean
+    public ServletServerContainerFactoryBean createWebSocketContainer() {
+        ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
+        container.setMaxTextMessageBufferSize(8192);
+        container.setMaxBinaryMessageBufferSize(8192);
+        return container;
     }
 }

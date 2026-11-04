@@ -253,3 +253,28 @@ VALUES
 ('20230101', '$2a$10$D99U46SmioRNIc0oIL3m0uZUMrel7IUeAtCDfqKGHTB8alixiGHf2', '张小明', '男', '2023', '计算机应用工程', '23计算机1班', '13800000001', 1, 0, 1),
 ('20230102', '$2a$10$D99U46SmioRNIc0oIL3m0uZUMrel7IUeAtCDfqKGHTB8alixiGHf2', '李小红', '女', '2023', '计算机应用工程', '23计算机2班', '13800000002', 1, 0, 1),
 ('20220103', '$2a$10$D99U46SmioRNIc0oIL3m0uZUMrel7IUeAtCDfqKGHTB8alixiGHf2', '王大力', '男', '2022', '软件工程', '22软件1班', '13800000003', 1, 0, 1);
+
+-- ========== 种子订阅关系（演示/测试用） ==========
+-- 作用：推送任务按「标签」定向时，选人的依据就是这张表。
+--       没有订阅数据，标签定向永远算出 0 人，实时推送也没人收。
+-- target_type=2 表示订阅的是标签，target_id 对应 tag 表的 id（1考研 / 4招聘）。
+-- 用 NOT EXISTS 保证重复执行不会插重复行（subscribe 表没有唯一索引）。
+INSERT INTO subscribe (student_id, target_type, target_id)
+SELECT s.id, 2, 1 FROM student s
+WHERE s.student_no = '20230101'
+  AND NOT EXISTS (SELECT 1 FROM subscribe x WHERE x.student_id = s.id AND x.target_type = 2 AND x.target_id = 1);
+
+INSERT INTO subscribe (student_id, target_type, target_id)
+SELECT s.id, 2, 4 FROM student s
+WHERE s.student_no = '20230102'
+  AND NOT EXISTS (SELECT 1 FROM subscribe x WHERE x.student_id = s.id AND x.target_type = 2 AND x.target_id = 4);
+
+INSERT INTO subscribe (student_id, target_type, target_id)
+SELECT s.id, 2, 1 FROM student s
+WHERE s.student_no = '20220103'
+  AND NOT EXISTS (SELECT 1 FROM subscribe x WHERE x.student_id = s.id AND x.target_type = 2 AND x.target_id = 1);
+
+INSERT INTO subscribe (student_id, target_type, target_id)
+SELECT s.id, 2, 4 FROM student s
+WHERE s.student_no = '20220103'
+  AND NOT EXISTS (SELECT 1 FROM subscribe x WHERE x.student_id = s.id AND x.target_type = 2 AND x.target_id = 4);
