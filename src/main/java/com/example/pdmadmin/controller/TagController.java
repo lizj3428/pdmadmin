@@ -1,6 +1,7 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.pdmadmin.entity.NewsTag;
@@ -25,6 +26,7 @@ import java.util.Map;
  */
 @io.swagger.v3.oas.annotations.tags.Tag(name = "资讯标签管理", description = "标签的增删改查，引用次数实时统计")
 @RestController
+@SaCheckRole("admin")
 public class TagController {
 
     @Resource

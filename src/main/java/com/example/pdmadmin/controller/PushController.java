@@ -1,6 +1,7 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.PushRecord;
 import com.example.pdmadmin.entity.PushTask;
@@ -30,6 +31,7 @@ import java.util.List;
  */
 @Tag(name = "推送管理", description = "推送任务的创建、执行、查询与推送记录")
 @RestController
+@SaCheckRole("admin")
 public class PushController {
 
     @Resource

@@ -9,6 +9,7 @@ import lombok.Getter;
 public enum ResponseCode {
     SUCCESS(200,"操作成功！"),
     ERROR(500,"操作失败！"),
+    NO_PERMISSION(403,"无访问权限！"),
 
     CREATE_CAPTCHA_ERROR(2001,"验证码失败！"),
     CAPTCHA_ERROR(2002,"验证码失败！"),

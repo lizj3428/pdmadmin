@@ -1,6 +1,8 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.annotation.SaIgnore;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Admin;
@@ -26,7 +28,7 @@ import java.util.List;
  */
 @Tag(name = "管理员信息管理", description = "管理员相关接口：登录、查询信息、修改密码")
 @RestController
-
+@SaCheckRole("admin")
 public class AdminController {
     @Resource
     private AdminService adminService;
@@ -105,6 +107,8 @@ public class AdminController {
      */
     @Operation(summary = "管理员登录")
     @PostMapping("/admin/login")
+    @SaIgnore   // 登录接口本身不可能「已登录」，必须跳过类上的 @SaCheckRole("admin")
+
     public R<Admin> login(@RequestParam String username, @RequestParam String userpwd,
                           @RequestParam String captchaId, @RequestParam String captchaCode){
         //1.校验验证码：输错或过期都不放行，校验通过后验证码立即失效

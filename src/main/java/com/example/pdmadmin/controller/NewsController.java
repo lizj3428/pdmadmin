@@ -1,6 +1,7 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.pdmadmin.entity.News;
@@ -10,6 +11,7 @@ import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.NewsTagMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
+import com.example.pdmadmin.service.AuditPushService;
 import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -32,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  */
 @io.swagger.v3.oas.annotations.tags.Tag(name = "资讯管理", description = "资讯的增删改查、审核、热点列表")
 @RestController
+@SaCheckRole("admin")
 public class NewsController {
 
     /** 热点资讯的 Redis 缓存 key。所有写操作之后都要删掉它，否则会读到旧数据 */
@@ -45,6 +48,8 @@ public class NewsController {
     private TagMapper tagMapper;
     @Resource
     private RedisTemplate<String, Object> redisTemplate;
+    @Resource
+    private AuditPushService auditPushService;
 
     @Operation(summary = "资讯分页列表", description = "支持标题模糊搜索、按分类/审核状态/发布状态筛选，按创建时间倒序")
     @PostMapping("/news/list")
@@ -95,13 +100,12 @@ public class NewsController {
         if (news.getTitle() == null || news.getTitle().trim().isEmpty()) {
             throw new RuntimeException("资讯标题不能为空！");
         }
-        // 创建人取当前登录账号的 id；authorType 暂时固定 1（管理员），
-        // 等教师端登录接口写好后，再根据登录角色区分 1管理员 / 2教师
+        // 创建人取当前登录账号的 id；authorType 按登录角色区分：1管理员 2教师
         // 当前登录账号的 id。登录标识现在是 "admin:1" 这种带前缀的字符串，
         // 不能再用 StpUtil.getLoginIdAsLong()（会抛 NumberFormatException），
         // 统一走 LoginUtil.currentId() 剥前缀取数字
         news.setAuthorId(LoginUtil.currentId());
-        news.setAuthorType(1);
+        news.setAuthorType(LoginUtil.ROLE_TEACHER.equals(LoginUtil.currentRole()) ? 2 : 1);
         // 状态字段一律由后端决定，不信任前端传来的值，否则谁都能直接发未审核的内容
         news.setAuditStatus(0);
         news.setPublishStatus(0);
@@ -204,6 +208,12 @@ public class NewsController {
         }
         newsMapper.updateById(update);
         redisTemplate.delete(HOT_CACHE_KEY);
+        if (auditStatus == 1) {
+            // 通过审核 = 发布，同时把这条资讯推给她该到的人：
+            // 有标签且有人订阅就按标签定向推，否则兜底推给全体学生。
+            // 异步执行，不占用审核接口的响应时间（详见 AuditPushService 注释）
+            auditPushService.pushOnAudit(id, LoginUtil.currentId());
+        }
         return R.success();
     }
 

@@ -1,12 +1,16 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.annotation.SaIgnore;
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Teacher;
 import com.example.pdmadmin.exception.BusinessException;
 import com.example.pdmadmin.mapper.TeacherMapper;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.response.ResponseCode;
+import com.example.pdmadmin.util.LoginUtil;
 import com.example.pdmadmin.util.PasswordUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -19,13 +23,20 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 教师管理
- * 【作用】教师负责投稿，论文里 author_type=2 就是教师发的资讯。
- *        本轮只做增删改查；教师登录接口等「教师投稿」那一轮一起做，
- *        因为投稿还要按 authorType 区分权限，单独做登录没意义。
+ * 教师管理 + 教师登录
+ *
+ * 【两种教师】
+ * admin_flag = 1：被授权进管理端的教师（例如负责宣传的老师），
+ *                 登录后角色是 ["teacher","admin"]，管理端所有接口都能用。
+ * admin_flag = 0：普通教师，角色只有 ["teacher"]，只能走 /tch/* 投稿线
+ *                 （发资讯 -> 管理员审核 -> 通过后推送学生）。
+ *
+ * 【登录身份】loginId 存成 teacher:2 这种形式，和 admin:1 隔开。
+ *            即使这个教师有管理权限，前缀也不会改成 admin，避免主键撞号。
  */
 @Tag(name = "教师管理", description = "教师的增删改查")
 @RestController
+@SaCheckRole("admin")
 public class TeacherController {
 
     @Resource
@@ -113,6 +124,62 @@ public class TeacherController {
     @SaCheckLogin
     public R del(@RequestParam List<Long> ids) {
         teacherMapper.deleteByIds(ids);
+        return R.success();
+    }
+
+    /* ==================== 以下三个接口供教师本人登录使用 ==================== */
+
+    @Operation(summary = "教师登录",
+            description = "返回的 adminFlag=1 表示该教师有管理端权限，前端据此决定登录后进哪个端")
+    @PostMapping("/teacher/login")
+    @SaIgnore   // 登录接口不可能已登录，必须跳过类上的 @SaCheckRole("admin")
+    public R<Teacher> login(@RequestParam String teacherNo, @RequestParam String password) {
+        Teacher teacher = teacherMapper.selectOne(
+                new LambdaQueryWrapper<Teacher>().eq(Teacher::getTeacherNo, teacherNo));
+
+        // 查不到人 和 密码不对 用同一句提示，避免暴露教工号是否存在
+        if (teacher == null || !PasswordUtil.matches(password, teacher.getPassword())) {
+            throw new BusinessException(ResponseCode.USERNAME_USERPWD_ERROR);
+        }
+        if (teacher.getStatus() != null && teacher.getStatus() == 0) {
+            throw new BusinessException(ResponseCode.ACCOUNT_DISABLED);
+        }
+        // 历史明文密码趁登录顺手升级成 BCrypt
+        if (!PasswordUtil.isEncoded(teacher.getPassword())) {
+            teacher.setPassword(PasswordUtil.encode(password));
+            teacherMapper.updateById(teacher);
+        }
+
+        // 前缀固定 teacher:，管理权限靠 StpInterfaceImpl 追加 admin 角色实现
+        StpUtil.login(LoginUtil.loginId(LoginUtil.ROLE_TEACHER, teacher.getId()));
+        teacher.setToken(StpUtil.getTokenValue());
+        teacher.setPassword(null);
+        return R.data(teacher);
+    }
+
+    @Operation(summary = "教师退出登录")
+    @PostMapping("/teacher/logout")
+    @SaIgnore   // 登出不能要求 admin 角色：普通教师本来就要能退出自己
+    public R logout() {
+        StpUtil.logout();
+        return R.success();
+    }
+
+    @Operation(summary = "设置/取消教师的管理端权限", description = "adminFlag=1 授权进管理端，0 取消。取消后对方下一次请求立即失效")
+    @PostMapping("/teacher/grantAdmin")
+    @SaCheckLogin
+    public R grantAdmin(@RequestParam Long id, @RequestParam Integer adminFlag) {
+        if (id == null) {
+            throw new RuntimeException("教师ID不能为空！");
+        }
+        Teacher teacher = teacherMapper.selectById(id);
+        if (teacher == null) {
+            throw new RuntimeException("教师不存在！");
+        }
+        Teacher update = new Teacher();
+        update.setId(id);
+        update.setAdminFlag(adminFlag != null && adminFlag == 1 ? 1 : 0);
+        teacherMapper.updateById(update);
         return R.success();
     }
 }

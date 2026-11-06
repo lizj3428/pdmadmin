@@ -24,6 +24,7 @@ public class Student {
     private String phone;       // 联系电话
     private Integer pushChannel; // 消息接收渠道 1站内信 2微信 3两者
     private Integer disturbFlag; // 免打扰标志 1开启 0关闭
+    private Integer adminFlag;   // 是否有管理端权限 1有（学生会等） 0无
     private Integer status;      // 账号状态 1启用 0禁用
     private LocalDateTime createTime; // 创建时间
 

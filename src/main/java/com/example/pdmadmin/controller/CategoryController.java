@@ -1,6 +1,7 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Category;
 import com.example.pdmadmin.mapper.CategoryMapper;
@@ -22,6 +23,7 @@ import java.util.List;
  */
 @Tag(name = "资讯分类管理", description = "分类的增删改查")
 @RestController
+@SaCheckRole("admin")
 public class CategoryController {
 
     @Resource

@@ -1,6 +1,8 @@
 package com.example.pdmadmin.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckRole;
+import cn.dev33.satoken.annotation.SaIgnore;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.pdmadmin.entity.Student;
@@ -27,9 +29,13 @@ import java.util.List;
  *
  * 【登录身份】loginId 存成 student:5 这种形式，和 admin:1 隔开，
  *            否则管理员 id=1 和学生 id=1 会互相顶掉 WebSocket 连接（详见 LoginUtil）。
+ *
+ * 【权限】类上锁 @SaCheckRole("admin")：学生信息是管理端数据，只有管理员能增删改查。
+ *        学生登录/登出两个方法用 @SaIgnore 跳过，否则学生连自己都登不进来。
  */
 @Tag(name = "学生管理", description = "学生的增删改查与学生端登录")
 @RestController
+@SaCheckRole("admin")
 public class StudentController {
 
     @Resource
@@ -142,6 +148,7 @@ public class StudentController {
      */
     @Operation(summary = "学生登录", description = "学号 + 密码登录，成功后返回 token")
     @PostMapping("/student/login")
+    @SaIgnore   // 登录接口必须跳过类上的 admin 角色校验
     public R<Student> login(@RequestParam String studentNo, @RequestParam String password) {
         Student student = studentMapper.selectOne(
                 new LambdaQueryWrapper<Student>().eq(Student::getStudentNo, studentNo));
@@ -170,9 +177,28 @@ public class StudentController {
 
     @Operation(summary = "学生退出登录")
     @PostMapping("/student/logout")
-    @SaCheckLogin
+    @SaIgnore   // 登出不能要求 admin 角色：学生本来就要能退出自己
     public R logout() {
         StpUtil.logout();
+        return R.success();
+    }
+
+    @Operation(summary = "设置/取消学生的管理端权限",
+            description = "adminFlag=1 授权进管理端（学生会等），0 取消。取消后对方下一次请求立即失效")
+    @PostMapping("/student/grantAdmin")
+    @SaCheckLogin
+    public R grantAdmin(@RequestParam Long id, @RequestParam Integer adminFlag) {
+        if (id == null) {
+            throw new RuntimeException("学生ID不能为空！");
+        }
+        Student student = studentMapper.selectById(id);
+        if (student == null) {
+            throw new RuntimeException("学生不存在！");
+        }
+        Student update = new Student();
+        update.setId(id);
+        update.setAdminFlag(adminFlag != null && adminFlag == 1 ? 1 : 0);
+        studentMapper.updateById(update);
         return R.success();
     }
 }
