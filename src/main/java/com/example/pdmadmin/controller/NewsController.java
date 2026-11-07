@@ -3,7 +3,6 @@ package com.example.pdmadmin.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.pdmadmin.entity.News;
 import com.example.pdmadmin.entity.NewsTag;
 import com.example.pdmadmin.entity.Tag;
@@ -157,16 +156,10 @@ public class NewsController {
         return R.success();
     }
 
-    @Operation(summary = "资讯详情", description = "返回资讯内容与标签，同时把阅读量 +1")
+    @Operation(summary = "资讯详情", description = "返回资讯内容与标签")
     @PostMapping("/news/detail")
     @SaCheckLogin
     public R<News> detail(@RequestParam Long id) {
-        // 用 SQL 自增而不是「查出来 +1 再写回」：
-        // 后者在多人同时打开时会互相覆盖，阅读量会少算
-        newsMapper.update(null, new LambdaUpdateWrapper<News>()
-                .eq(News::getId, id)
-                .setSql("view_count = view_count + 1"));
-        // 再查一次，让返回值里的阅读量是自增后的新值
         News news = newsMapper.selectById(id);
         if (news == null) {
             throw new RuntimeException("资讯不存在！");
@@ -192,6 +185,14 @@ public class NewsController {
         News news = newsMapper.selectById(id);
         if (news == null) {
             throw new RuntimeException("资讯不存在！");
+        }
+        // 教师不能审自己投的稿，否则「投稿→审核」等于自己批自己。
+        // 必须同时判 authorType：admin 和 teacher 是两张表，主键都从 1 开始，
+        // 只比 authorId 会把管理员发的稿（authorId=1）误判成教师 1 自己的。
+        if (LoginUtil.ROLE_TEACHER.equals(LoginUtil.currentRole())
+                && news.getAuthorType() != null && news.getAuthorType() == 2
+                && news.getAuthorId() != null && news.getAuthorId().equals(LoginUtil.currentId())) {
+            throw new RuntimeException("不能审核自己提交的资讯！");
         }
         News update = new News();
         update.setId(id);

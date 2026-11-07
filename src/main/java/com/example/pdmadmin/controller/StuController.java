@@ -7,18 +7,17 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.pdmadmin.entity.Category;
 import com.example.pdmadmin.entity.Message;
 import com.example.pdmadmin.entity.News;
-import com.example.pdmadmin.entity.NewsTag;
 import com.example.pdmadmin.entity.Student;
 import com.example.pdmadmin.entity.Subscribe;
 import com.example.pdmadmin.entity.Tag;
 import com.example.pdmadmin.mapper.CategoryMapper;
 import com.example.pdmadmin.mapper.MessageMapper;
 import com.example.pdmadmin.mapper.NewsMapper;
-import com.example.pdmadmin.mapper.NewsTagMapper;
 import com.example.pdmadmin.mapper.StudentMapper;
 import com.example.pdmadmin.mapper.SubscribeMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
+import com.example.pdmadmin.service.StudentNewsService;
 import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -58,7 +57,7 @@ public class StuController {
     @Resource
     private NewsMapper newsMapper;
     @Resource
-    private NewsTagMapper newsTagMapper;
+    private StudentNewsService studentNewsService;
     @Resource
     private TagMapper tagMapper;
     @Resource
@@ -104,27 +103,11 @@ public class StuController {
         return R.data(pageInfo);
     }
 
-    @Operation(summary = "学生端资讯详情", description = "只能看已发布的资讯，阅读量 +1，返回标签名")
+    @Operation(summary = "学生端资讯详情", description = "只能看已发布的资讯，同一学生首次阅读计数，返回标签名")
     @PostMapping("/stu/news/detail")
     @SaCheckLogin
     public R<News> newsDetail(@RequestParam Long id) {
-        News news = newsMapper.selectById(id);
-        if (news == null || news.getAuditStatus() == null || news.getAuditStatus() != 1
-                || news.getPublishStatus() == null || news.getPublishStatus() != 1) {
-            throw new RuntimeException("资讯不存在或未发布！");
-        }
-        // SQL 自增，避免并发打开时互相覆盖
-        newsMapper.update(null, new LambdaUpdateWrapper<News>()
-                .eq(News::getId, id)
-                .setSql("view_count = view_count + 1"));
-        news.setViewCount(news.getViewCount() == null ? 1 : news.getViewCount() + 1);
-
-        List<Long> tagIds = newsTagMapper.selectList(
-                        new LambdaQueryWrapper<NewsTag>().eq(NewsTag::getNewsId, id))
-                .stream().map(NewsTag::getTagId).toList();
-        news.setTagNames(tagIds.isEmpty() ? List.of()
-                : tagMapper.selectByIds(tagIds).stream().map(Tag::getName).toList());
-        return R.data(news);
+        return R.data(studentNewsService.readPublishedNews(LoginUtil.currentId(), id));
     }
 
     @Operation(summary = "学生端分类列表", description = "只返回启用状态的分类，用于首页筛选")
@@ -181,6 +164,19 @@ public class StuController {
     public R readAll() {
         messageMapper.update(null, new LambdaUpdateWrapper<Message>()
                 .eq(Message::getStudentId, LoginUtil.currentId())
+                .eq(Message::getReadFlag, 0)
+                .set(Message::getReadFlag, 1));
+        return R.success();
+    }
+
+    @Operation(summary = "标记资讯通知已读")
+    @PostMapping("/stu/message/readByNews")
+    @SaCheckLogin
+    public R readByNews(@RequestParam Long newsId) {
+        messageMapper.update(null, new LambdaUpdateWrapper<Message>()
+                .eq(Message::getStudentId, LoginUtil.currentId())
+                .eq(Message::getNewsId, newsId)
+                .eq(Message::getMsgType, 1)
                 .eq(Message::getReadFlag, 0)
                 .set(Message::getReadFlag, 1));
         return R.success();
