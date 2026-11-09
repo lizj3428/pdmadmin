@@ -18,6 +18,7 @@ import com.example.pdmadmin.websocket.MessagePushService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -163,7 +164,7 @@ public class PushService {
                 message.setMsgType(1);   // 1 资讯通知
                 message.setReadFlag(0);  // 未读
                 message.setCreateTime(LocalDateTime.now());
-                messageMapper.insert(message);
+                saveMessageIfAbsent(message);
 
                 record.setSendStatus(1); // 1 已提交
                 messagePushService.sendToUser(
@@ -189,6 +190,22 @@ public class PushService {
         task.setStatus(3);
         pushTaskMapper.updateById(task);
         log.warn("推送任务 {} 执行失败：{}", task.getId(), reason);
+    }
+
+    private void saveMessageIfAbsent(Message message) {
+        LambdaQueryWrapper<Message> existing = new LambdaQueryWrapper<Message>()
+                .eq(Message::getStudentId, message.getStudentId())
+                .eq(Message::getNewsId, message.getNewsId());
+        if (messageMapper.exists(existing)) {
+            return;
+        }
+        try {
+            messageMapper.insert(message);
+        } catch (DuplicateKeyException exception) {
+            if (!messageMapper.exists(existing)) {
+                throw exception;
+            }
+        }
     }
 
     /**

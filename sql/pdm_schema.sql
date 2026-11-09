@@ -207,7 +207,8 @@ CREATE TABLE message (
     read_flag   TINYINT      NOT NULL DEFAULT 0      COMMENT '已读标志 0未读 1已读',
     create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (id),
-    KEY idx_msg_student (student_id, read_flag)
+    KEY idx_msg_student (student_id, read_flag),
+    UNIQUE KEY uk_msg_student_news (student_id, news_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '站内消息表';
 
 -- ========== 表4-12 收藏表 collect ==========

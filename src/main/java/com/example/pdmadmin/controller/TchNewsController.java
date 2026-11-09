@@ -7,11 +7,13 @@ import com.example.pdmadmin.entity.Category;
 import com.example.pdmadmin.entity.News;
 import com.example.pdmadmin.entity.NewsTag;
 import com.example.pdmadmin.entity.Tag;
+import com.example.pdmadmin.exception.BusinessException;
 import com.example.pdmadmin.mapper.CategoryMapper;
 import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.NewsTagMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
+import com.example.pdmadmin.response.ResponseCode;
 import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -120,9 +122,7 @@ public class TchNewsController {
     @PostMapping("/tch/news/add")
     @SaCheckLogin
     public R add(@RequestBody News news) {
-        if (news.getTitle() == null || news.getTitle().trim().isEmpty()) {
-            throw new RuntimeException("资讯标题不能为空！");
-        }
+        news.setTitle(validateUniqueTitle(news.getTitle(), news.getCategoryId(), null));
         // 作者一律取当前登录教师，前端传什么都不认
         news.setAuthorId(LoginUtil.currentId());
         news.setAuthorType(2);
@@ -150,12 +150,17 @@ public class TchNewsController {
             throw new RuntimeException("已审核通过的资讯不能再修改，如需调整请联系管理员！");
         }
 
+        String title = validateUniqueTitle(
+                news.getTitle() == null ? exist.getTitle() : news.getTitle(),
+                news.getCategoryId() == null ? exist.getCategoryId() : news.getCategoryId(),
+                exist.getId());
+
         // 不用 newsMapper.updateById(news)：那样会把前端传来的 authorId、
         // publishStatus 等字段一起写进去，等于给了越权改状态的入口。
         // 这里只挑允许修改的内容字段，其余一律由后端决定。
         News update = new News();
         update.setId(news.getId());
-        update.setTitle(news.getTitle());
+        update.setTitle(news.getTitle() == null ? null : title);
         update.setSummary(news.getSummary());
         update.setContent(news.getContent());
         update.setCoverUrl(news.getCoverUrl());
@@ -173,6 +178,30 @@ public class TchNewsController {
         }
         redisTemplate.delete(HOT_CACHE_KEY);
         return R.success();
+    }
+
+    private String validateUniqueTitle(String title, Long categoryId, Long currentId) {
+        if (title == null || title.trim().isEmpty()) {
+            throw new RuntimeException("资讯标题不能为空！");
+        }
+        // 查重条件是「标题 + 分类」，分类为空时下面那个 eq 会变成 category_id = null，
+        // 永远查不到重复，等于查重失效，最后只会抛一个数据库非空约束的错。
+        // 所以在查之前先拦住。
+        if (categoryId == null) {
+            throw new RuntimeException("请选择资讯分类！");
+        }
+        String normalizedTitle = title.trim();
+        boolean duplicate = newsMapper.exists(new LambdaQueryWrapper<News>()
+                .apply("CAST(TRIM(title) AS BINARY) = CAST({0} AS BINARY)", normalizedTitle)
+                .eq(News::getCategoryId, categoryId)
+                .ne(News::getPublishStatus, 2)
+                .ne(currentId != null, News::getId, currentId));
+        if (duplicate) {
+            throw new BusinessException(
+                    "已存在同名资讯《" + normalizedTitle + "》，请修改标题或先下线旧资讯！",
+                    ResponseCode.ERROR.getCode());
+        }
+        return normalizedTitle;
     }
 
     @Operation(summary = "投稿详情", description = "只能看自己的稿子；不增加阅读量，教师自己预览不该计入统计")
