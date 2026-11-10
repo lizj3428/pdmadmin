@@ -24,6 +24,7 @@ import com.github.pagehelper.PageInfo;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -232,6 +233,7 @@ public class StuController {
     @Operation(summary = "保存我的订阅", description = "先清空该类型的旧订阅再写入，传空数组表示全部取消")
     @PostMapping("/stu/subscribe/save")
     @SaCheckLogin
+    @Transactional(rollbackFor = Exception.class)
     public R saveSubscribe(@RequestParam(defaultValue = "2") Integer targetType,
                            @RequestParam(required = false) List<Long> targetIds) {
         if (targetType != 1 && targetType != 2) {

@@ -2,18 +2,21 @@ package com.example.pdmadmin.controller;
 
 import com.example.pdmadmin.websocket.MessagePushService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
+ * 启动参数加 --pdm.test-push.enabled=true 才生效，仅本地调试用。
  * 临时验证接口（阶段0地基自测用）
  * 【作用】用来手动触发一次"实时推送"，方便你在浏览器里看到弹窗，
  *        确认 WebSocket 链路（握手 → 登记 → 推送 → 前端弹窗）是通的。
  *        真实业务里推送由"审核通过 / 定时推送"等动作触发，不需要这个接口；
  *        等阶段2推送管理做完，这个文件可以删掉。
  */
+@ConditionalOnProperty(name = "pdm.test-push.enabled", havingValue = "true")
 @RestController
 @RequestMapping("/test")
 public class TestPushController {

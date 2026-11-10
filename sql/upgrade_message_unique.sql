@@ -18,5 +18,3 @@ SET @message_index_ddl = IF(
 PREPARE message_index_statement FROM @message_index_ddl;
 EXECUTE message_index_statement;
 DEALLOCATE PREPARE message_index_statement;
-
-UPDATE message SET read_flag = 0 WHERE student_id = 3;

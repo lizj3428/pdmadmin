@@ -124,9 +124,12 @@ public class PushService {
      * 调用方负责保证任务存在；这里负责把状态、记录、消息、实时通知全部落好
      */
     public void execute(PushTask task) {
-        // 1. 状态置"执行中"
+        // 1. 抢占任务：把状态从待执行/失败改成执行中，抢不到就不许发
+        int claimed = pushTaskMapper.claim(task.getId());
+        if (claimed == 0) {
+            throw new RuntimeException("推送任务已完成或正在执行，不能重复推送！");
+        }
         task.setStatus(1);
-        pushTaskMapper.updateById(task);
 
         // 2. 关联资讯必须存在，否则推出去的消息没有标题正文
         News news = newsMapper.selectById(task.getNewsId());
@@ -135,7 +138,16 @@ public class PushService {
             return;
         }
 
-        // 3. 算目标人群
+        // 3. 资讯必须已通过审核且已发布，草稿、驳回、下线的稿子一律不推
+        if (news.getAuditStatus() == null || news.getAuditStatus() != 1
+                || news.getPublishStatus() == null || news.getPublishStatus() != 1) {
+            // 先落"失败"再抛：定时扫到的任务不会卡在待执行，手动点推送的人也能看到原因
+            String reason = "资讯未通过审核或已下线，不能推送";
+            markFailed(task, reason);
+            throw new RuntimeException(reason);
+        }
+
+        // 4. 算目标人群
         List<Student> targets;
         try {
             targets = resolveTargets(task.getTargetType(), task.getTargetValue());
@@ -144,7 +156,7 @@ public class PushService {
             return;
         }
 
-        // 4. 逐个学生发
+        // 5. 逐个学生发
         for (Student student : targets) {
             long start = System.currentTimeMillis();
             PushRecord record = new PushRecord();
@@ -179,7 +191,7 @@ public class PushService {
             pushRecordMapper.insert(record);
         }
 
-        // 5. 回填目标人数与完成状态
+        // 6. 回填目标人数与完成状态
         task.setTargetCount(targets.size());
         task.setStatus(2);
         pushTaskMapper.updateById(task);
