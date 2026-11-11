@@ -128,6 +128,7 @@ public class TchNewsController {
         news.setAuthorType(2);
         news.setAuditStatus(0);
         news.setPublishStatus(0);
+        news.setTopFlag(0);
         news.setPublishTime(null);
         news.setAuditOpinion(null);
         news.setViewCount(0);

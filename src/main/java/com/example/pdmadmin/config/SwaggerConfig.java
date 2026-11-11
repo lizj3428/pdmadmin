@@ -22,10 +22,12 @@ public class SwaggerConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("潘多码SpringBoot3+Vue3脚手架")
-                        .version("1.0")
-                        .description( "潘多码SpringBoot3+Vue3脚手架接口文档")
-                        .contact(new Contact().name("潘多码").url("www.panduoma.com")));
+                        .title("校园资讯推送平台 · 接口文档")
+                        .version("1.0.0")
+                        .description("基于 Spring Boot 的校园资讯推送平台，面向管理员、教师和学生，"
+                                + "提供资讯投稿与审核、分类与标签、订阅管理、定向与定时推送、站内消息及数据统计接口。"
+                                + "\n\n毕业设计题目：《基于 Spring Boot 的校园资讯推送平台设计与实现》。")
+                        .contact(new Contact().name("李志军").url("https://github.com/lizj3428")));
     }
 
 

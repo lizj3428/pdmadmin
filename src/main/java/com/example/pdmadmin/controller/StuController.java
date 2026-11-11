@@ -93,8 +93,7 @@ public class StuController {
             // 用子查询而不是先查出 id 列表再 in()：标签下资讯多的时候，in 的参数个数会爆
             wrapper.apply("id IN (SELECT news_id FROM news_tag WHERE tag_id = {0})", tagId);
         }
-        // 重要的排前面，同级别按发布时间倒序
-        wrapper.orderByDesc(News::getLevel).orderByDesc(News::getPublishTime);
+        wrapper.orderByDesc(News::getTopFlag, News::getLevel, News::getPublishTime, News::getId);
 
         PageHelper.startPage(pageNum, pageSize);
         List<News> list = newsMapper.selectList(wrapper);

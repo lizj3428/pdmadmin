@@ -105,6 +105,7 @@ CREATE TABLE news (
     audit_status   TINYINT      NOT NULL DEFAULT 0      COMMENT '审核状态 0待审核 1通过 2驳回',
     audit_opinion  VARCHAR(100) DEFAULT NULL            COMMENT '审核意见',
     publish_status TINYINT      NOT NULL DEFAULT 0      COMMENT '发布状态 0未发布 1已发布 2已下线',
+    top_flag       TINYINT      NOT NULL DEFAULT 0      COMMENT '置顶状态 0普通 1置顶',
     publish_time   DATETIME     DEFAULT NULL            COMMENT '发布时间',
     view_count     INT          NOT NULL DEFAULT 0      COMMENT '阅读量',
     create_time    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

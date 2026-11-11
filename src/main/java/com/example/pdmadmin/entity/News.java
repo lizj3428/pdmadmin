@@ -26,6 +26,7 @@ public class News {
     private Integer auditStatus;  // 审核状态 0待审核 1通过 2驳回
     private String auditOpinion;  // 审核意见
     private Integer publishStatus; // 发布状态 0未发布 1已发布 2已下线
+    private Integer topFlag;
     private LocalDateTime publishTime; // 发布时间
     private Integer viewCount;    // 阅读量
     private LocalDateTime createTime; // 创建时间

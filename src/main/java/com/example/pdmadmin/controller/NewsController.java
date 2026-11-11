@@ -11,6 +11,7 @@ import com.example.pdmadmin.mapper.NewsTagMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.service.AuditPushService;
+import com.example.pdmadmin.service.NewsPinService;
 import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -49,6 +50,8 @@ public class NewsController {
     private RedisTemplate<String, Object> redisTemplate;
     @Resource
     private AuditPushService auditPushService;
+    @Resource
+    private NewsPinService newsPinService;
 
     @Operation(summary = "资讯分页列表", description = "支持标题模糊搜索、按分类/审核状态/发布状态筛选，按创建时间倒序")
     @PostMapping("/news/list")
@@ -108,6 +111,7 @@ public class NewsController {
         // 状态字段一律由后端决定，不信任前端传来的值，否则谁都能直接发未审核的内容
         news.setAuditStatus(0);
         news.setPublishStatus(0);
+        news.setTopFlag(0);
         news.setPublishTime(null);
         news.setViewCount(0);
         news.setCreateTime(LocalDateTime.now());
@@ -131,6 +135,7 @@ public class NewsController {
         // 于是它们保持原值——防止通过「修改」接口绕过审核直接发布
         news.setAuditStatus(null);
         news.setPublishStatus(null);
+        news.setTopFlag(null);
         news.setPublishTime(null);
         news.setViewCount(null);
         news.setAuthorId(null);
@@ -141,6 +146,15 @@ public class NewsController {
         if (news.getTagNames() != null) {
             saveNewsTags(news.getId(), news.getTagNames());
         }
+        redisTemplate.delete(HOT_CACHE_KEY);
+        return R.success();
+    }
+
+    @Operation(summary = "设置资讯置顶", description = "仅已审核且已发布的资讯可以设置；topFlag=1 置顶，0 取消")
+    @PostMapping("/news/top")
+    @SaCheckLogin
+    public R setTop(@RequestParam Long id, @RequestParam Integer topFlag) {
+        newsPinService.setTopFlag(id, topFlag);
         redisTemplate.delete(HOT_CACHE_KEY);
         return R.success();
     }
@@ -206,6 +220,7 @@ public class NewsController {
         } else {
             // 驳回：保持未发布，已经发布过的也一并下线
             update.setPublishStatus(0);
+            update.setTopFlag(0);
         }
         newsMapper.updateById(update);
         redisTemplate.delete(HOT_CACHE_KEY);
