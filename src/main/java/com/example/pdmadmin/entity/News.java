@@ -28,6 +28,7 @@ public class News {
     private Integer publishStatus; // 发布状态 0未发布 1已发布 2已下线
     private Integer topFlag;
     private LocalDateTime publishTime; // 发布时间
+    private LocalDateTime expireTime;  // 有效期截止时间，NULL 表示长期有效
     private Integer viewCount;    // 阅读量
     private LocalDateTime createTime; // 创建时间
     private LocalDateTime updateTime; // 更新时间

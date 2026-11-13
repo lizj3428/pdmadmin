@@ -3,15 +3,21 @@ package com.example.pdmadmin.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.pdmadmin.entity.Message;
 import com.example.pdmadmin.entity.News;
 import com.example.pdmadmin.entity.NewsTag;
+import com.example.pdmadmin.entity.PushTask;
 import com.example.pdmadmin.entity.Tag;
+import com.example.pdmadmin.mapper.MessageMapper;
 import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.NewsTagMapper;
+import com.example.pdmadmin.mapper.PushTaskMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.service.AuditPushService;
 import com.example.pdmadmin.service.NewsPinService;
+import com.example.pdmadmin.service.PushService;
 import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -52,6 +58,12 @@ public class NewsController {
     private AuditPushService auditPushService;
     @Resource
     private NewsPinService newsPinService;
+    @Resource
+    private MessageMapper messageMapper;
+    @Resource
+    private PushTaskMapper pushTaskMapper;
+    @Resource
+    private PushService pushService;
 
     @Operation(summary = "资讯分页列表", description = "支持标题模糊搜索、按分类/审核状态/发布状态筛选，按创建时间倒序")
     @PostMapping("/news/list")
@@ -141,6 +153,11 @@ public class NewsController {
         news.setAuthorId(null);
         news.setUpdateTime(LocalDateTime.now());
         newsMapper.updateById(news);
+        // 有效期允许被「清空」：updateById 会跳过 null 字段，清空就写不进去，
+        // 所以单独用 update wrapper 无条件覆盖，null 即长期有效
+        newsMapper.update(null, new LambdaUpdateWrapper<News>()
+                .eq(News::getId, news.getId())
+                .set(News::getExpireTime, news.getExpireTime()));
         // tagNames 为 null 表示「这次不碰标签」（比如只改标题）；
         // 传空数组 [] 才表示「把这条资讯的标签清空」。两种语义必须区分开
         if (news.getTagNames() != null) {
@@ -192,7 +209,8 @@ public class NewsController {
     @SaCheckLogin
     public R audit(@RequestParam Long id,
                    @RequestParam Integer auditStatus,
-                   @RequestParam(required = false) String auditOpinion) {
+                   @RequestParam(required = false) String auditOpinion,
+                   @RequestParam(required = false, defaultValue = "true") Boolean autoPublish) {
         if (auditStatus == null || (auditStatus != 1 && auditStatus != 2)) {
             throw new RuntimeException("审核结果只能是 1（通过）或 2（驳回）！");
         }
@@ -213,22 +231,118 @@ public class NewsController {
         update.setAuditStatus(auditStatus);
         update.setAuditOpinion(auditOpinion);
         update.setUpdateTime(LocalDateTime.now());
-        if (auditStatus == 1) {
+        // 通过时是否顺手发布：默认发布（保持原有行为）。
+        // 管理员勾了「通过后暂不发布」就不动 publish_status，等他在资讯列表点「发布」走发布配置页
+        boolean publishNow = auditStatus == 1 && (autoPublish == null || autoPublish);
+        if (publishNow) {
             // 审核通过 = 同时发布，否则「通过」了还是看不见
             update.setPublishStatus(1);
             update.setPublishTime(LocalDateTime.now());
-        } else {
+        } else if (auditStatus == 2) {
             // 驳回：保持未发布，已经发布过的也一并下线
             update.setPublishStatus(0);
             update.setTopFlag(0);
         }
         newsMapper.updateById(update);
         redisTemplate.delete(HOT_CACHE_KEY);
-        if (auditStatus == 1) {
+        if (publishNow) {
             // 通过审核 = 发布，同时把这条资讯推给她该到的人：
             // 有标签且有人订阅就按标签定向推，否则兜底推给全体学生。
             // 异步执行，不占用审核接口的响应时间（详见 AuditPushService 注释）
             auditPushService.pushOnAudit(id, LoginUtil.currentId());
+        }
+        noticeAuthorIfTeacher(news, auditStatus, auditOpinion);
+        return R.success();
+    }
+
+    /**
+     * 审核结果通知教师
+     * 【为什么要判 author_type】教师和管理员的主键都从 1 开始，教师投稿是 author_type=2，
+     *        只给这类稿子的作者发通知，管理员自己发的稿不用通知自己。
+     * 【为什么复用 student_id 列】message 表原本只给学生发消息，加 receiver_type 区分接收人类型，
+     *        接收人 ID 仍存在 student_id 列里，避免为了一个字段再开一张表。
+     */
+    private void noticeAuthorIfTeacher(News news, Integer auditStatus, String auditOpinion) {
+        if (news.getAuthorType() == null || news.getAuthorType() != 2 || news.getAuthorId() == null) {
+            return;
+        }
+        Message notice = new Message();
+        notice.setReceiverType(2);
+        notice.setStudentId(news.getAuthorId());
+        notice.setNewsId(news.getId());
+        notice.setMsgType(3);   // 3 审核结果通知
+        notice.setReadFlag(0);
+        notice.setTitle("资讯审核结果通知");
+        String opinion = (auditOpinion == null || auditOpinion.trim().isEmpty())
+                ? "" : "，审核意见：" + auditOpinion;
+        notice.setContent(auditStatus == 1
+                ? "您的投稿《" + news.getTitle() + "》已通过审核" + opinion
+                : "您的投稿《" + news.getTitle() + "》未通过审核" + opinion);
+        notice.setCreateTime(LocalDateTime.now());
+        messageMapper.insert(notice);
+    }
+
+    @Operation(summary = "发布资讯", description = "审核通过但未发布的资讯在这里配置发布时间、目标人群与推送渠道")
+    @PostMapping("/news/publish")
+    @SaCheckLogin
+    public R publish(@RequestParam Long id,
+                     @RequestParam(required = false) String publishTime,
+                     @RequestParam(required = false) Integer targetType,
+                     @RequestParam(required = false) String targetValue,
+                     @RequestParam(required = false, defaultValue = "1") Integer channel) {
+        News news = newsMapper.selectById(id);
+        if (news == null) {
+            throw new RuntimeException("资讯不存在！");
+        }
+        if (news.getAuditStatus() == null || news.getAuditStatus() != 1) {
+            throw new RuntimeException("资讯尚未通过审核，无法发布！");
+        }
+        if (news.getPublishStatus() != null && news.getPublishStatus() == 1) {
+            throw new RuntimeException("该资讯已发布，不可重复发布！");
+        }
+
+        // 发布时间：留空或填了过去的时间，都按「立即发布」处理
+        LocalDateTime planTime = null;
+        if (publishTime != null && !publishTime.trim().isEmpty()) {
+            try {
+                planTime = LocalDateTime.parse(publishTime.trim());
+            } catch (Exception e) {
+                throw new RuntimeException("发布时间格式不正确！");
+            }
+        }
+        boolean immediate = planTime == null || planTime.isBefore(LocalDateTime.now());
+
+        News update = new News();
+        update.setId(id);
+        update.setPublishStatus(1);
+        update.setPublishTime(immediate ? LocalDateTime.now() : planTime);
+        update.setUpdateTime(LocalDateTime.now());
+        newsMapper.updateById(update);
+        redisTemplate.delete(HOT_CACHE_KEY);
+
+        // 没选目标人群就只发布，不推送
+        if (targetType == null) {
+            return R.success();
+        }
+        if (targetType != 1 && (targetValue == null || targetValue.trim().isEmpty())) {
+            throw new RuntimeException("请填写目标人群取值！");
+        }
+        PushTask task = new PushTask();
+        task.setNewsId(id);
+        task.setTaskName("发布推送#" + id);
+        task.setTargetType(targetType);
+        task.setTargetValue(targetType == 1 ? null : targetValue);
+        task.setChannel(channel == null ? 1 : channel);
+        task.setPushType(immediate ? 1 : 2);
+        task.setPlanTime(immediate ? null : planTime);
+        task.setStatus(0);
+        task.setTargetCount(0);
+        task.setCreateBy(LoginUtil.currentId());
+        task.setCreateTime(LocalDateTime.now());
+        pushTaskMapper.insert(task);
+        // 立即发布的当场推；定时发布的落库后由 PushScheduler 到点扫表执行
+        if (immediate) {
+            pushService.execute(task);
         }
         return R.success();
     }

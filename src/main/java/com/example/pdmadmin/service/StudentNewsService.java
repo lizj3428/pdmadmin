@@ -12,6 +12,7 @@ import com.example.pdmadmin.mapper.TagMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -38,6 +39,10 @@ public class StudentNewsService {
         if (news == null || !Integer.valueOf(1).equals(news.getAuditStatus())
                 || !Integer.valueOf(1).equals(news.getPublishStatus())) {
             throw new RuntimeException("资讯不存在或未发布！");
+        }
+        // 有效期过了就当已下线：expire_time 为空是长期有效
+        if (news.getExpireTime() != null && news.getExpireTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("该资讯已过期");
         }
 
         if (newsReadRecordMapper.count(studentId, newsId) == 0) {

@@ -32,7 +32,7 @@ import java.util.Map;
  * 【作用】推送模块的全部核心逻辑都在这里，Controller 只负责参数校验和调用。
  *
  * 【一次推送做四件事】
- *   1. 按 target_type 算出目标学生（全部 / 年级 / 专业 / 标签）
+ *   1. 按 target_type 算出目标学生（全部 / 年级 / 专业 / 标签 / 班级）
  *   2. 给每个学生写一条站内信（message 表）
  *   3. 给每个学生写一条推送记录（push_record 表，记录成功/失败与耗时）
  *   4. 学生当前在线的话，通过 WebSocket 实时弹一条通知
@@ -49,6 +49,8 @@ public class PushService {
     private static final int CHANNEL_INBOX = 1;
     /** 目标人群类型：按标签 */
     private static final int TARGET_TAG = 4;
+    /** 目标人群类型：按班级 */
+    private static final int TARGET_CLASS = 5;
     /** 订阅对象类型：标签 */
     private static final int SUBSCRIBE_TAG = 2;
     /**
@@ -96,6 +98,10 @@ public class PushService {
             case 3:
                 // 按专业：targetValue 形如 "计算机应用工程,软件工程"
                 wrapper.in(Student::getMajor, splitValues(targetValue));
+                break;
+            case TARGET_CLASS:
+                // 按班级：targetValue 形如 "23计算机1班,23计算机2班"
+                wrapper.in(Student::getClassName, splitValues(targetValue));
                 break;
             case TARGET_TAG:
                 // 按标签：先找订阅了这些标签的学生 id，再按 id 查人

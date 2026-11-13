@@ -5,12 +5,16 @@ import cn.dev33.satoken.annotation.SaCheckRole;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.pdmadmin.entity.Category;
+import com.example.pdmadmin.entity.Collect;
+import com.example.pdmadmin.entity.Comment;
 import com.example.pdmadmin.entity.Message;
 import com.example.pdmadmin.entity.News;
 import com.example.pdmadmin.entity.Student;
 import com.example.pdmadmin.entity.Subscribe;
 import com.example.pdmadmin.entity.Tag;
 import com.example.pdmadmin.mapper.CategoryMapper;
+import com.example.pdmadmin.mapper.CollectMapper;
+import com.example.pdmadmin.mapper.CommentMapper;
 import com.example.pdmadmin.mapper.MessageMapper;
 import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.StudentMapper;
@@ -32,6 +36,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 学生端
@@ -69,6 +75,10 @@ public class StuController {
     private SubscribeMapper subscribeMapper;
     @Resource
     private StudentMapper studentMapper;
+    @Resource
+    private CollectMapper collectMapper;
+    @Resource
+    private CommentMapper commentMapper;
 
     // ==================== 资讯 ====================
 
@@ -84,6 +94,9 @@ public class StuController {
         // 前端传什么 publishStatus 都改不了
         wrapper.eq(News::getAuditStatus, 1);
         wrapper.eq(News::getPublishStatus, 1);
+        // 有效期：expire_time 为 NULL 表示长期有效，否则必须还没到截止时间
+        wrapper.and(w -> w.isNull(News::getExpireTime)
+                .or().gt(News::getExpireTime, LocalDateTime.now()));
 
         wrapper.like(query.getTitle() != null && !query.getTitle().trim().isEmpty(),
                 News::getTitle, query.getTitle());
@@ -136,7 +149,9 @@ public class StuController {
                                             @RequestParam Integer pageNum,
                                             @RequestParam Integer pageSize) {
         LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<>();
-        // student_id 从登录态取，前端传别人的 id 也没用
+        // student_id 从登录态取，前端传别人的 id 也没用；
+        // receiver_type=1 限定只查学生消息，避免教师通知（同样存在 student_id 列）串进来
+        wrapper.eq(Message::getReceiverType, 1);
         wrapper.eq(Message::getStudentId, LoginUtil.currentId());
         wrapper.eq(query.getReadFlag() != null, Message::getReadFlag, query.getReadFlag());
         wrapper.orderByDesc(Message::getCreateTime);
@@ -153,6 +168,7 @@ public class StuController {
         // 传别人的消息 id 会命中 0 行，不会报错也不会改到别人的数据
         messageMapper.update(null, new LambdaUpdateWrapper<Message>()
                 .eq(Message::getId, id)
+                .eq(Message::getReceiverType, 1)
                 .eq(Message::getStudentId, LoginUtil.currentId())
                 .set(Message::getReadFlag, 1));
         return R.success();
@@ -163,6 +179,7 @@ public class StuController {
     @SaCheckLogin
     public R readAll() {
         messageMapper.update(null, new LambdaUpdateWrapper<Message>()
+                .eq(Message::getReceiverType, 1)
                 .eq(Message::getStudentId, LoginUtil.currentId())
                 .eq(Message::getReadFlag, 0)
                 .set(Message::getReadFlag, 1));
@@ -174,6 +191,7 @@ public class StuController {
     @SaCheckLogin
     public R readByNews(@RequestParam Long newsId) {
         messageMapper.update(null, new LambdaUpdateWrapper<Message>()
+                .eq(Message::getReceiverType, 1)
                 .eq(Message::getStudentId, LoginUtil.currentId())
                 .eq(Message::getNewsId, newsId)
                 .eq(Message::getMsgType, 1)
@@ -187,6 +205,7 @@ public class StuController {
     @SaCheckLogin
     public R<Long> unread() {
         return R.data(messageMapper.selectCount(new LambdaQueryWrapper<Message>()
+                .eq(Message::getReceiverType, 1)
                 .eq(Message::getStudentId, LoginUtil.currentId())
                 .eq(Message::getReadFlag, 0)));
     }
@@ -258,5 +277,125 @@ public class StuController {
             subscribeMapper.insert(subscribe);
         }
         return R.success();
+    }
+
+    // ==================== 收藏与评论 ====================
+
+    @Operation(summary = "收藏/取消收藏", description = "同一学生对同一篇资讯只保留一条收藏记录，再次调用即取消")
+    @PostMapping("/stu/collect/toggle")
+    @SaCheckLogin
+    public R<Map<String, Object>> toggleCollect(@RequestParam Long newsId) {
+        Long studentId = LoginUtil.currentId();
+        Map<String, Object> data = new LinkedHashMap<>();
+        Collect exist = collectMapper.selectOne(new LambdaQueryWrapper<Collect>()
+                .eq(Collect::getStudentId, studentId)
+                .eq(Collect::getNewsId, newsId));
+        if (exist != null) {
+            collectMapper.deleteById(exist.getId());
+            data.put("collected", false);
+            return R.data(data);
+        }
+        Collect collect = new Collect();
+        collect.setStudentId(studentId);
+        collect.setNewsId(newsId);
+        collect.setCreateTime(LocalDateTime.now());
+        collectMapper.insert(collect);
+        data.put("collected", true);
+        return R.data(data);
+    }
+
+    @Operation(summary = "收藏状态", description = "详情页打开时查询当前学生是否已收藏该资讯")
+    @PostMapping("/stu/collect/status")
+    @SaCheckLogin
+    public R<Map<String, Object>> collectStatus(@RequestParam Long newsId) {
+        Long count = collectMapper.selectCount(new LambdaQueryWrapper<Collect>()
+                .eq(Collect::getStudentId, LoginUtil.currentId())
+                .eq(Collect::getNewsId, newsId));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("collected", count != null && count > 0);
+        return R.data(data);
+    }
+
+    @Operation(summary = "我的收藏列表", description = "按收藏时间倒序，返回资讯标题与发布时间")
+    @PostMapping("/stu/collect/list")
+    @SaCheckLogin
+    public R<List<Map<String, Object>>> collectList() {
+        List<Collect> collects = collectMapper.selectList(new LambdaQueryWrapper<Collect>()
+                .eq(Collect::getStudentId, LoginUtil.currentId())
+                .orderByDesc(Collect::getId));
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (collects.isEmpty()) {
+            return R.data(result);
+        }
+        Map<Long, News> newsMap = newsMapper
+                .selectBatchIds(collects.stream().map(Collect::getNewsId).toList())
+                .stream().collect(Collectors.toMap(News::getId, n -> n));
+        for (Collect collect : collects) {
+            News news = newsMap.get(collect.getNewsId());
+            if (news == null) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("collectId", collect.getId());
+            item.put("newsId", news.getId());
+            item.put("title", news.getTitle());
+            item.put("publishTime", news.getPublishTime());
+            item.put("collectTime", collect.getCreateTime());
+            result.add(item);
+        }
+        return R.data(result);
+    }
+
+    @Operation(summary = "资讯评论列表", description = "只返回审核通过的评论，附带评论人姓名")
+    @PostMapping("/stu/comment/list")
+    @SaCheckLogin
+    public R<List<Map<String, Object>>> commentList(@RequestParam Long newsId) {
+        List<Comment> comments = commentMapper.selectList(new LambdaQueryWrapper<Comment>()
+                .eq(Comment::getNewsId, newsId)
+                .eq(Comment::getAuditStatus, 1)
+                .orderByDesc(Comment::getId));
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (comments.isEmpty()) {
+            return R.data(result);
+        }
+        Set<Long> studentIds = comments.stream().map(Comment::getStudentId).collect(Collectors.toSet());
+        Map<Long, Student> studentMap = studentMapper.selectBatchIds(studentIds)
+                .stream().collect(Collectors.toMap(Student::getId, s -> s));
+        for (Comment comment : comments) {
+            Student student = studentMap.get(comment.getStudentId());
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", comment.getId());
+            item.put("studentName", student == null ? "匿名" : student.getRealName());
+            item.put("content", comment.getContent());
+            item.put("createTime", comment.getCreateTime());
+            result.add(item);
+        }
+        return R.data(result);
+    }
+
+    @Operation(summary = "发表评论", description = "内容不能为空且不超过 300 字，提交后立即展示")
+    @PostMapping("/stu/comment/add")
+    @SaCheckLogin
+    public R addComment(@RequestParam Long newsId, @RequestParam String content) {
+        String text = content == null ? "" : content.trim();
+        if (text.isEmpty()) {
+            throw new RuntimeException("评论内容不能为空！");
+        }
+        if (text.length() > 300) {
+            throw new RuntimeException("评论内容不能超过 300 字！");
+        }
+        News news = newsMapper.selectById(newsId);
+        if (news == null || news.getPublishStatus() == null || news.getPublishStatus() != 1) {
+            throw new RuntimeException("资讯不存在或未发布！");
+        }
+        Comment comment = new Comment();
+        comment.setNewsId(newsId);
+        comment.setStudentId(LoginUtil.currentId());
+        comment.setContent(text);
+        // audit_status 字段保留，先发后审：提交即可见
+        comment.setAuditStatus(1);
+        comment.setCreateTime(LocalDateTime.now());
+        commentMapper.insert(comment);
+        return R.success("评论成功");
     }
 }
