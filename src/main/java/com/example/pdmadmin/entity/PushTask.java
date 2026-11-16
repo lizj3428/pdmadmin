@@ -15,7 +15,8 @@ public class PushTask {
     private Long id;              // 任务ID
     private Long newsId;          // 关联资讯
     private String taskName;      // 任务名称
-    private Integer targetType;   // 目标人群类型 1全部 2按年级 3按专业 4按标签
+    private Integer targetType;   // 目标人群类型 1全部 2按年级 3按专业 4按标签 5按班级
+    private Integer targetRole;   // 接收角色 1学生 2教师 3学生和教师
     private String targetValue;   // 目标人群取值，多个以逗号分隔
     private Integer channel;      // 推送渠道 1站内信 2微信 3企业微信
     private Integer pushType;     // 推送方式 1立即 2定时

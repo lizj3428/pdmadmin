@@ -28,10 +28,41 @@ public interface StatMapper {
               (SELECT COUNT(*) FROM push_task)                              AS taskTotal,
               (SELECT COUNT(*) FROM push_record)                            AS pushTotal,
               (SELECT COUNT(*) FROM push_record WHERE send_status IN (1,2)) AS pushSuccess,
+              (SELECT COUNT(*) FROM push_record
+                WHERE send_status IN (1,2) AND receiver_type = 1)           AS pushStudentTotal,
+              (SELECT COUNT(*) FROM push_record p
+                 JOIN push_task t ON t.id = p.task_id
+                 JOIN news_read_record r ON r.news_id = t.news_id
+                                        AND r.student_id = p.student_id
+                                        AND r.create_time >= p.send_time
+                WHERE p.send_status IN (1,2) AND p.receiver_type = 1)       AS pushClicked,
               (SELECT COUNT(*) FROM message)                                AS msgTotal,
               (SELECT COUNT(*) FROM message WHERE read_flag = 0)            AS msgUnread
             """)
     Map<String, Object> overview();
+
+    /**
+     * 各推送任务的点击情况
+     * 点击口径：该接收人收到这条资讯后（阅读记录时间 ≥ 发送时间）产生了阅读记录。
+     * 教师端不写阅读记录表，所以点击率只统计学生侧，避免把教师算进分母拉低数值。
+     */
+    @Select("""
+            SELECT t.id AS taskId, t.task_name AS taskName, t.news_id AS newsId,
+                   COUNT(p.id) AS pushed,
+                   COUNT(r.student_id) AS clicked
+            FROM push_task t
+            LEFT JOIN push_record p ON p.task_id = t.id
+                                   AND p.receiver_type = 1
+                                   AND p.send_status IN (1,2)
+            LEFT JOIN news_read_record r ON r.news_id = t.news_id
+                                        AND r.student_id = p.student_id
+                                        AND r.create_time >= p.send_time
+            WHERE t.status = 2
+            GROUP BY t.id, t.task_name, t.news_id
+            ORDER BY t.id DESC
+            LIMIT #{limit}
+            """)
+    List<Map<String, Object>> pushClickByTask(@Param("limit") int limit);
 
     /** 各分类下的资讯数量；用 LEFT JOIN 保证没有资讯的分类也能出现（数量为 0） */
     @Select("""

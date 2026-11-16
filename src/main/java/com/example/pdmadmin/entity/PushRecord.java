@@ -14,7 +14,8 @@ public class PushRecord {
     @TableId(type = IdType.AUTO)
     private Long id;            // 记录ID
     private Long taskId;        // 任务ID
-    private Long studentId;     // 接收学生
+    private Integer receiverType; // 接收人类型 1学生 2教师
+    private Long studentId;     // 接收人ID（学生时为学生ID，教师时为教师ID）
     private Integer channel;    // 推送渠道 1站内信 2微信 3企业微信
     private Integer sendStatus; // 发送状态 0待发送 1已提交 2已送达 3发送失败
     private String failReason;  // 失败原因

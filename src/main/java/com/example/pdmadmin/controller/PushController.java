@@ -63,6 +63,9 @@ public class PushController {
         if (task.getChannel() == null) {
             task.setChannel(1); // 默认站内信
         }
+        if (task.getTargetRole() == null) {
+            task.setTargetRole(1); // 默认仅学生
+        }
         if (task.getPushType() == null) {
             task.setPushType(1); // 默认立即
         }
@@ -146,7 +149,8 @@ public class PushController {
     @PostMapping("/push/preview")
     @SaCheckLogin
     public R<Integer> preview(@RequestParam Integer targetType,
-                              @RequestParam(required = false) String targetValue) {
-        return R.data(pushService.resolveTargets(targetType, targetValue).size());
+                              @RequestParam(required = false) String targetValue,
+                              @RequestParam(required = false, defaultValue = "1") Integer targetRole) {
+        return R.data(pushService.resolveReceivers(targetType, targetValue, targetRole).size());
     }
 }

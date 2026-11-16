@@ -62,6 +62,13 @@ public class StatisticsController {
         return R.data(statMapper.pushStatus());
     }
 
+    @Operation(summary = "推送点击情况", description = "按任务统计推送人数与其中产生阅读记录的人数，默认 10 条")
+    @PostMapping("/stat/pushClick")
+    @SaCheckLogin
+    public R<List<Map<String, Object>>> pushClick(@RequestParam(defaultValue = "10") int limit) {
+        return R.data(statMapper.pushClickByTask(limit));
+    }
+
     @Operation(summary = "学生增长趋势", description = "近 N 天每天新增的学生数，默认 7 天")
     @PostMapping("/stat/studentDaily")
     @SaCheckLogin

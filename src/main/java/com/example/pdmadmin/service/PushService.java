@@ -7,12 +7,14 @@ import com.example.pdmadmin.entity.PushRecord;
 import com.example.pdmadmin.entity.PushTask;
 import com.example.pdmadmin.entity.Student;
 import com.example.pdmadmin.entity.Subscribe;
+import com.example.pdmadmin.entity.Teacher;
 import com.example.pdmadmin.mapper.MessageMapper;
 import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.PushRecordMapper;
 import com.example.pdmadmin.mapper.PushTaskMapper;
 import com.example.pdmadmin.mapper.StudentMapper;
 import com.example.pdmadmin.mapper.SubscribeMapper;
+import com.example.pdmadmin.mapper.TeacherMapper;
 import com.example.pdmadmin.util.LoginUtil;
 import com.example.pdmadmin.websocket.MessagePushService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,10 +34,14 @@ import java.util.Map;
  * 【作用】推送模块的全部核心逻辑都在这里，Controller 只负责参数校验和调用。
  *
  * 【一次推送做四件事】
- *   1. 按 target_type 算出目标学生（全部 / 年级 / 专业 / 标签 / 班级）
- *   2. 给每个学生写一条站内信（message 表）
- *   3. 给每个学生写一条推送记录（push_record 表，记录成功/失败与耗时）
- *   4. 学生当前在线的话，通过 WebSocket 实时弹一条通知
+ *   1. 按 target_role 与 target_type 算出目标接收人（学生 / 教师，再叠加年级 / 专业 / 标签 / 班级）
+ *   2. 给每个接收人写一条站内信（message 表）
+ *   3. 给每个接收人写一条推送记录（push_record 表，记录成功/失败与耗时）
+ *   4. 接收人当前在线的话，通过 WebSocket 实时弹一条通知
+ *
+ * 【教师为什么不参与年级/专业/班级/标签筛选】
+ * 这几项是学生档案上的属性，教师表里没有对应字段，
+ * 也没有教师订阅标签的业务设计。所以按角色选中教师时，教师侧一律取全体启用账号。
  *
  * 【为什么不加事务】
  * 推送是"尽力而为"语义：给 100 个人发，第 37 个人失败，不该把前 36 条已发的消息回滚掉。
@@ -51,6 +57,10 @@ public class PushService {
     private static final int TARGET_TAG = 4;
     /** 目标人群类型：按班级 */
     private static final int TARGET_CLASS = 5;
+    /** 接收角色：仅学生 / 仅教师 / 学生和教师 */
+    private static final int ROLE_STUDENT = 1;
+    private static final int ROLE_TEACHER = 2;
+    private static final int ROLE_BOTH = 3;
     /** 订阅对象类型：标签 */
     private static final int SUBSCRIBE_TAG = 2;
     /**
@@ -71,6 +81,8 @@ public class PushService {
     private SubscribeMapper subscribeMapper;
     @Resource
     private StudentMapper studentMapper;
+    @Resource
+    private TeacherMapper teacherMapper;
     @Resource
     private NewsMapper newsMapper;
     @Resource
@@ -125,6 +137,33 @@ public class PushService {
         return studentMapper.selectList(wrapper);
     }
 
+    /** 一个接收人：id + 角色类型（1学生 2教师）。学生和教师主键各自从 1 开始，必须带类型区分 */
+    public record Receiver(Long id, int type) {
+    }
+
+    /**
+     * 按「接收角色 + 目标人群条件」算出最终收件人
+     * 角色定范围，人群条件只作用于学生；教师侧取全体启用账号（原因见类注释）
+     * 预估人数与真正执行都走这一个方法，保证「显示多少人」与「实际发多少人」一致
+     */
+    public List<Receiver> resolveReceivers(Integer targetType, String targetValue, Integer targetRole) {
+        int role = targetRole == null ? ROLE_STUDENT : targetRole;
+        List<Receiver> receivers = new ArrayList<>();
+        if (role == ROLE_STUDENT || role == ROLE_BOTH) {
+            for (Student student : resolveTargets(targetType, targetValue)) {
+                receivers.add(new Receiver(student.getId(), ROLE_STUDENT));
+            }
+        }
+        if (role == ROLE_TEACHER || role == ROLE_BOTH) {
+            List<Teacher> teachers = teacherMapper.selectList(
+                    new LambdaQueryWrapper<Teacher>().eq(Teacher::getStatus, 1));
+            for (Teacher teacher : teachers) {
+                receivers.add(new Receiver(teacher.getId(), ROLE_TEACHER));
+            }
+        }
+        return receivers;
+    }
+
     /**
      * 执行一个推送任务
      * 调用方负责保证任务存在；这里负责把状态、记录、消息、实时通知全部落好
@@ -153,29 +192,31 @@ public class PushService {
             throw new RuntimeException(reason);
         }
 
-        // 4. 算目标人群
-        List<Student> targets;
+        // 4. 算目标接收人（角色定范围，人群条件筛选学生）
+        List<Receiver> targets;
         try {
-            targets = resolveTargets(task.getTargetType(), task.getTargetValue());
+            targets = resolveReceivers(task.getTargetType(), task.getTargetValue(), task.getTargetRole());
         } catch (Exception e) {
             markFailed(task, "目标人群解析失败：" + e.getMessage());
             return;
         }
 
-        // 5. 逐个学生发
-        for (Student student : targets) {
+        // 5. 逐个接收人发
+        for (Receiver receiver : targets) {
             long start = System.currentTimeMillis();
             PushRecord record = new PushRecord();
             record.setTaskId(task.getId());
-            record.setStudentId(student.getId());
+            record.setReceiverType(receiver.type());
+            record.setStudentId(receiver.id());
             record.setChannel(task.getChannel());
             record.setRetryCount(0);
             record.setSendTime(LocalDateTime.now());
 
             if (task.getChannel() != null && task.getChannel() == CHANNEL_INBOX) {
-                // 4.1 站内信：先落库，学生下次打开消息中心能看到
+                // 4.1 站内信：先落库，接收人下次打开消息中心能看到
                 Message message = new Message();
-                message.setStudentId(student.getId());
+                message.setReceiverType(receiver.type());
+                message.setStudentId(receiver.id());
                 message.setTitle(news.getTitle());
                 message.setContent(news.getSummary() == null ? "" : news.getSummary());
                 message.setNewsId(news.getId());
@@ -186,7 +227,8 @@ public class PushService {
 
                 record.setSendStatus(1); // 1 已提交
                 messagePushService.sendToUser(
-                        LoginUtil.loginId(LoginUtil.ROLE_STUDENT, student.getId()),
+                        LoginUtil.loginId(receiver.type() == ROLE_TEACHER
+                                ? LoginUtil.ROLE_TEACHER : LoginUtil.ROLE_STUDENT, receiver.id()),
                         buildWsMessage(task, news));
             } else {
                 // 4.2 微信 / 企业微信：没有对接实现，如实记为失败，不假装发成功
@@ -212,6 +254,7 @@ public class PushService {
 
     private void saveMessageIfAbsent(Message message) {
         LambdaQueryWrapper<Message> existing = new LambdaQueryWrapper<Message>()
+                .eq(Message::getReceiverType, message.getReceiverType())
                 .eq(Message::getStudentId, message.getStudentId())
                 .eq(Message::getNewsId, message.getNewsId());
         if (messageMapper.exists(existing)) {
