@@ -107,6 +107,7 @@ CREATE TABLE news (
     publish_status TINYINT      NOT NULL DEFAULT 0      COMMENT '发布状态 0未发布 1已发布 2已下线',
     top_flag       TINYINT      NOT NULL DEFAULT 0      COMMENT '置顶状态 0普通 1置顶',
     publish_time   DATETIME     DEFAULT NULL            COMMENT '发布时间',
+    expire_time    DATETIME     DEFAULT NULL            COMMENT '有效期截止时间，NULL 表示长期有效',
     view_count     INT          NOT NULL DEFAULT 0      COMMENT '阅读量',
     create_time    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time    DATETIME     DEFAULT NULL            COMMENT '更新时间',
@@ -165,7 +166,8 @@ CREATE TABLE push_task (
     id           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '任务ID',
     news_id      BIGINT       NOT NULL                COMMENT '关联资讯',
     task_name    VARCHAR(60)  NOT NULL                COMMENT '任务名称',
-    target_type  TINYINT      NOT NULL                COMMENT '目标人群类型 1全部 2按年级 3按专业 4按标签',
+    target_type  TINYINT      NOT NULL                COMMENT '目标人群类型 1全部 2按年级 3按专业 4按标签 5按班级',
+    target_role  TINYINT      NOT NULL DEFAULT 1      COMMENT '接收角色 1学生 2教师 3学生和教师',
     target_value VARCHAR(200) DEFAULT NULL            COMMENT '目标人群取值，多个以逗号分隔',
     channel      TINYINT      NOT NULL                COMMENT '推送渠道 1站内信 2微信 3企业微信',
     push_type    TINYINT      NOT NULL                COMMENT '推送方式 1立即 2定时',
@@ -184,7 +186,8 @@ DROP TABLE IF EXISTS push_record;
 CREATE TABLE push_record (
     id          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '记录ID',
     task_id     BIGINT      NOT NULL                COMMENT '任务ID',
-    student_id  BIGINT      NOT NULL                COMMENT '接收学生',
+    receiver_type TINYINT   NOT NULL DEFAULT 1      COMMENT '接收人类型 1学生 2教师',
+    student_id  BIGINT      NOT NULL                COMMENT '接收人ID，receiver_type=1 关联学生表，=2 关联教师表',
     channel     TINYINT     NOT NULL                COMMENT '推送渠道 1站内信 2微信 3企业微信',
     send_status TINYINT     NOT NULL DEFAULT 0      COMMENT '发送状态 0待发送 1已提交 2已送达 3发送失败',
     fail_reason VARCHAR(100) DEFAULT NULL           COMMENT '失败原因',
@@ -200,16 +203,17 @@ CREATE TABLE push_record (
 DROP TABLE IF EXISTS message;
 CREATE TABLE message (
     id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '消息ID',
-    student_id  BIGINT       NOT NULL                COMMENT '接收学生',
+    receiver_type TINYINT    NOT NULL DEFAULT 1      COMMENT '接收人类型 1学生 2教师',
+    student_id  BIGINT       NOT NULL                COMMENT '接收人ID，receiver_type=1 关联学生表，=2 关联教师表',
     title       VARCHAR(100) NOT NULL                COMMENT '消息标题',
     content     VARCHAR(500) NOT NULL                COMMENT '消息内容',
     news_id     BIGINT       DEFAULT NULL            COMMENT '关联资讯',
-    msg_type    TINYINT      NOT NULL DEFAULT 1      COMMENT '消息类型 1资讯通知 2系统公告',
+    msg_type    TINYINT      NOT NULL DEFAULT 1      COMMENT '消息类型 1资讯通知 2系统公告 3审核结果通知',
     read_flag   TINYINT      NOT NULL DEFAULT 0      COMMENT '已读标志 0未读 1已读',
     create_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (id),
     KEY idx_msg_student (student_id, read_flag),
-    UNIQUE KEY uk_msg_student_news (student_id, news_id)
+    UNIQUE KEY uk_msg_receiver_news (receiver_type, student_id, news_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '站内消息表';
 
 -- ========== 表4-12 收藏表 collect ==========

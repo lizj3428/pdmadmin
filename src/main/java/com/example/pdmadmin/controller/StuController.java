@@ -10,7 +10,6 @@ import com.example.pdmadmin.entity.Comment;
 import com.example.pdmadmin.entity.Message;
 import com.example.pdmadmin.entity.News;
 import com.example.pdmadmin.entity.Student;
-import com.example.pdmadmin.entity.Subscribe;
 import com.example.pdmadmin.entity.Tag;
 import com.example.pdmadmin.mapper.CategoryMapper;
 import com.example.pdmadmin.mapper.CollectMapper;
@@ -18,20 +17,18 @@ import com.example.pdmadmin.mapper.CommentMapper;
 import com.example.pdmadmin.mapper.MessageMapper;
 import com.example.pdmadmin.mapper.NewsMapper;
 import com.example.pdmadmin.mapper.StudentMapper;
-import com.example.pdmadmin.mapper.SubscribeMapper;
 import com.example.pdmadmin.mapper.TagMapper;
 import com.example.pdmadmin.response.R;
 import com.example.pdmadmin.service.StudentNewsService;
+import com.example.pdmadmin.service.SubscribeService;
 import com.example.pdmadmin.util.LoginUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,8 +56,6 @@ import java.util.stream.Collectors;
 @SaCheckRole("student")
 public class StuController {
 
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
     @Resource
     private NewsMapper newsMapper;
     @Resource
@@ -72,7 +67,7 @@ public class StuController {
     @Resource
     private MessageMapper messageMapper;
     @Resource
-    private SubscribeMapper subscribeMapper;
+    private SubscribeService subscribeService;
     @Resource
     private StudentMapper studentMapper;
     @Resource
@@ -228,54 +223,15 @@ public class StuController {
     @PostMapping("/stu/subscribe/list")
     @SaCheckLogin
     public R<List<Map<String, Object>>> subscribeList() {
-        List<Subscribe> list = subscribeMapper.selectList(new LambdaQueryWrapper<Subscribe>()
-                .eq(Subscribe::getStudentId, LoginUtil.currentId()));
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Subscribe s : list) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("targetType", s.getTargetType());
-            item.put("targetId", s.getTargetId());
-            if (s.getTargetType() != null && s.getTargetType() == 2) {
-                Tag tag = tagMapper.selectById(s.getTargetId());
-                item.put("name", tag == null ? "已删除的标签" : tag.getName());
-            } else {
-                Category category = categoryMapper.selectById(s.getTargetId());
-                item.put("name", category == null ? "已删除的分类" : category.getName());
-            }
-            item.put("createTime", s.getCreateTime() == null ? "" : s.getCreateTime().format(DAY));
-            result.add(item);
-        }
-        return R.data(result);
+        return R.data(subscribeService.listByStudent(LoginUtil.currentId()));
     }
 
     @Operation(summary = "保存我的订阅", description = "先清空该类型的旧订阅再写入，传空数组表示全部取消")
     @PostMapping("/stu/subscribe/save")
     @SaCheckLogin
-    @Transactional(rollbackFor = Exception.class)
     public R saveSubscribe(@RequestParam(defaultValue = "2") Integer targetType,
                            @RequestParam(required = false) List<Long> targetIds) {
-        if (targetType != 1 && targetType != 2) {
-            throw new RuntimeException("订阅类型只能是 1（分类）或 2（标签）！");
-        }
-        Long studentId = LoginUtil.currentId();
-        // 先删后插：前端每次提交的是「我最终要订阅哪些」，整体覆盖比逐个比对增删可靠
-        subscribeMapper.delete(new LambdaQueryWrapper<Subscribe>()
-                .eq(Subscribe::getStudentId, studentId)
-                .eq(Subscribe::getTargetType, targetType));
-        if (targetIds == null || targetIds.isEmpty()) {
-            return R.success();
-        }
-        for (Long targetId : targetIds.stream().distinct().toList()) {
-            if (targetId == null) {
-                continue;
-            }
-            Subscribe subscribe = new Subscribe();
-            subscribe.setStudentId(studentId);
-            subscribe.setTargetType(targetType);
-            subscribe.setTargetId(targetId);
-            subscribe.setCreateTime(LocalDateTime.now());
-            subscribeMapper.insert(subscribe);
-        }
+        subscribeService.saveSubscriptions(LoginUtil.currentId(), targetType, targetIds);
         return R.success();
     }
 
